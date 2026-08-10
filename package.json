@@ -1,0 +1,41 @@
+{
+  "name": "bingwall",
+  "version": "0.1.0",
+  "description": "A small, installable Windows desktop app that replaces the official Bing Wallpaper app.",
+  "type": "module",
+  "main": "dist/main/main.js",
+  "author": "",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "build:ts": "tsc -p tsconfig.json",
+    "start": "npm run build:ts && electron .",
+    "build": "npm run build:ts && electron-builder"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0",
+    "typescript": "^5.5.0"
+  },
+  "build": {
+    "appId": "dev.elysion.bingwall",
+    "productName": "BingWall",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "renderer/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

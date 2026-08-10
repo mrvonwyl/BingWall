@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+out/
+*.log
+npm-debug.log*
+
+# Local data folders (dev-run app data, should never be committed)
+BingWallpapers/
+.bingwall-data/
+
+# Claude Code session-local state
+.claude/scheduled_tasks.lock
