@@ -36,3 +36,39 @@ body {
   text-align: center;
   color: #666;
 }
+
+#history-strip {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0 1.5rem 1rem;
+  overflow-x: auto;
+}
+
+.history-thumbnail {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+  line-height: 0;
+}
+
+.history-thumbnail img {
+  width: 96px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
+.history-thumbnail.active {
+  border-color: #0078d4;
+}
+
+#auto-refresh-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1.5rem 1.5rem;
+  color: #333;
+}

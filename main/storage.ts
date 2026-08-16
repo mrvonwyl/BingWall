@@ -35,3 +35,19 @@ export async function saveImage(folder: string, date: string, data: ArrayBuffer)
   await fs.writeFile(imagePath, Buffer.from(data));
   return imagePath;
 }
+
+export async function listImageDates(folder: string): Promise<string[]> {
+  try {
+    const files = await fs.readdir(folder);
+    return files.filter((file) => file.endsWith('.jpg')).map((file) => file.slice(0, -'.jpg'.length));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function deleteImage(folder: string, date: string): Promise<void> {
+  await fs.unlink(path.join(folder, `${date}.jpg`));
+}

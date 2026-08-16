@@ -29,6 +29,8 @@ function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateD
     writeMetadata: vi.fn(async () => undefined),
     saveImage: vi.fn(async (folder: string, date: string) => `${folder}\\${date}.jpg`),
     setWallpaper: vi.fn(async () => undefined),
+    listImageDates: vi.fn(async () => ['2026-08-16']),
+    deleteImage: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -47,5 +49,14 @@ describe('runDailyUpdate', () => {
     expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
     expect(result.metadata.date).toBe('2026-08-16');
     expect(result.imagePath).toBe('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
+  });
+
+  it('prunes image files that dropped out of retained metadata', async () => {
+    const deps = buildDeps({ listImageDates: vi.fn(async () => ['2026-08-16', '2026-08-01']) });
+
+    await runDailyUpdate(deps);
+
+    expect(deps.deleteImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-01');
+    expect(deps.deleteImage).not.toHaveBeenCalledWith(deps.dataFolder, '2026-08-16');
   });
 });

@@ -3,8 +3,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setWallpaper } from 'wallpaper';
 import { getCurrentWallpaper } from './currentWallpaper.js';
+import { getHistory } from './history.js';
 import { runDailyUpdate } from './pipeline.js';
-import { getDataFolder, readMetadata, saveImage, writeMetadata } from './storage.js';
+import { readSettings, writeSettings } from './settings.js';
+import { selectWallpaper } from './selectWallpaper.js';
+import { deleteImage, getDataFolder, listImageDates, readMetadata, saveImage, writeMetadata } from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..', '..');
@@ -60,6 +63,8 @@ async function refreshWallpaper(): Promise<void> {
     writeMetadata,
     saveImage,
     setWallpaper: (imagePath) => setWallpaper(imagePath, { scale: 'fill' }),
+    listImageDates,
+    deleteImage,
   });
 }
 
@@ -71,6 +76,35 @@ ipcMain.handle('get-current-wallpaper', async () => {
   }
 
   return { metadata: result.metadata, imageUrl: pathToFileURL(result.imagePath).toString() };
+});
+
+ipcMain.handle('get-history', async () => {
+  const items = await getHistory({ dataFolder: getDataFolder(), readMetadata });
+
+  return items.map((item) => ({ metadata: item.metadata, imageUrl: pathToFileURL(item.imagePath).toString() }));
+});
+
+ipcMain.handle('select-wallpaper', async (_event, date: string) => {
+  const result = await selectWallpaper(date, {
+    dataFolder: getDataFolder(),
+    readMetadata,
+    setWallpaper: (imagePath) => setWallpaper(imagePath, { scale: 'fill' }),
+  });
+
+  if (!result) {
+    return null;
+  }
+
+  return { metadata: result.metadata, imageUrl: pathToFileURL(result.imagePath).toString() };
+});
+
+ipcMain.handle('get-settings', async () => {
+  return readSettings(getDataFolder());
+});
+
+ipcMain.handle('update-settings', async (_event, settings: { dailyAutoRefresh: boolean }) => {
+  await writeSettings(getDataFolder(), settings);
+  return settings;
 });
 
 app.whenReady().then(() => {

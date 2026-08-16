@@ -1,4 +1,5 @@
 import { buildImageUrl, downloadImage, fetchBingImagesWithFallback, resolveImageResolution, toStoredMetadata } from './bing.js';
+import { pruneOrphanedImages } from './history.js';
 import { upsertMetadata } from './storage.js';
 import type { RunDailyUpdateDeps, RunDailyUpdateResult } from './pipeline.models.js';
 
@@ -14,7 +15,14 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
   const imagePath = await deps.saveImage(deps.dataFolder, metadata.date, imageData);
 
   const existing = await deps.readMetadata(deps.dataFolder);
-  await deps.writeMetadata(deps.dataFolder, upsertMetadata(existing, metadata));
+  const retained = upsertMetadata(existing, metadata);
+  await deps.writeMetadata(deps.dataFolder, retained);
+  await pruneOrphanedImages({
+    dataFolder: deps.dataFolder,
+    entries: retained,
+    listImageDates: deps.listImageDates,
+    deleteImage: deps.deleteImage,
+  });
 
   await deps.setWallpaper(imagePath);
 
