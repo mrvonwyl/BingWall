@@ -6,8 +6,16 @@
     <link rel="stylesheet" href="index.css" />
   </head>
   <body>
-    <h1>BingWall</h1>
-    <p>Placeholder window — Phase 0 scaffolding.</p>
-    <script src="index.js"></script>
+    <main id="wallpaper" hidden>
+      <img id="wallpaper-image" alt="" />
+      <div id="wallpaper-info">
+        <p id="wallpaper-date"></p>
+        <h1 id="wallpaper-title"></h1>
+        <p id="wallpaper-description"></p>
+        <p id="wallpaper-copyright"></p>
+      </div>
+    </main>
+    <p id="empty-state" hidden>No wallpaper yet. It will appear here once BingWall downloads today's image.</p>
+    <script type="module" src="../dist/renderer/index.js"></script>
   </body>
 </html>

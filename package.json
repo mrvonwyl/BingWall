@@ -8,11 +8,11 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "build:ts": "tsc -p tsconfig.json",
+    "build:ts": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json",
     "start": "npm run build:ts && electron .",
     "build": "npm run build:ts && electron-builder",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.preload.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
