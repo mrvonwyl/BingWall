@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, powerMonitor, screen, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setWallpaper } from 'wallpaper';
@@ -12,13 +12,17 @@ import { deleteImage, getDataFolder, listImageDates, readMetadata, saveImage, wr
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..', '..');
 
+const BACKGROUND_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let isQuitting = false;
 
-function createWindow(): void {
+function createWindow(show: boolean): void {
   mainWindow = new BrowserWindow({
     width: 900,
     height: 600,
+    show,
     webPreferences: {
       preload: path.join(projectRoot, 'dist', 'preload', 'preload.cjs'),
     },
@@ -29,27 +33,63 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  mainWindow.on('close', (event) => {
+    if (isQuitting) {
+      return;
+    }
+    event.preventDefault();
+    mainWindow?.hide();
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
   mainWindow.loadFile(path.join(projectRoot, 'renderer', 'index.html'));
+}
+
+function buildTrayMenu(): Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: 'Refresh now',
+      click: () => void safeRefreshWallpaper(),
+    },
+    {
+      label: 'Open wallpaper folder',
+      click: () => void shell.openPath(getDataFolder()),
+    },
+    { type: 'separator' },
+    {
+      label: 'Launch on login',
+      type: 'checkbox',
+      checked: app.getLoginItemSettings().openAtLogin,
+      click: (menuItem) => app.setLoginItemSettings({ openAtLogin: menuItem.checked }),
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
 }
 
 function createTray(): void {
   const icon = nativeImage.createFromPath(path.join(projectRoot, 'build', 'icon.png'));
   tray = new Tray(icon);
   tray.setToolTip('BingWall');
+  tray.setContextMenu(buildTrayMenu());
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Open',
-      click: () => mainWindow?.show(),
-    },
-    {
-      label: 'Quit',
-      click: () => app.quit(),
-    },
-  ]);
-  tray.setContextMenu(contextMenu);
+  tray.on('click', () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
 
-  tray.on('click', () => mainWindow?.show());
+  tray.on('right-click', () => {
+    tray?.setContextMenu(buildTrayMenu());
+  });
 }
 
 async function refreshWallpaper(): Promise<void> {
@@ -66,6 +106,14 @@ async function refreshWallpaper(): Promise<void> {
     listImageDates,
     deleteImage,
   });
+}
+
+async function safeRefreshWallpaper(): Promise<void> {
+  try {
+    await refreshWallpaper();
+  } catch (error) {
+    console.error('BingWall: background refresh failed', error);
+  }
 }
 
 ipcMain.handle('get-current-wallpaper', async () => {
@@ -109,18 +157,22 @@ ipcMain.handle('update-settings', async (_event, settings: { dailyAutoRefresh: b
 
 app.whenReady().then(() => {
   createTray();
-  createWindow();
-  void refreshWallpaper();
+  createWindow(!app.getLoginItemSettings().wasOpenedAtLogin);
+  void safeRefreshWallpaper();
+
+  setInterval(() => void safeRefreshWallpaper(), BACKGROUND_REFRESH_INTERVAL_MS);
+  powerMonitor.on('resume', () => void safeRefreshWallpaper());
+  powerMonitor.on('unlock-screen', () => void safeRefreshWallpaper());
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createWindow(true);
+    } else {
+      mainWindow?.show();
     }
   });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+app.on('before-quit', () => {
+  isQuitting = true;
 });
