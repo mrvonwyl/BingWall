@@ -10,13 +10,16 @@
   "scripts": {
     "build:ts": "tsc -p tsconfig.json",
     "start": "npm run build:ts && electron .",
-    "build": "npm run build:ts && electron-builder"
+    "build": "npm run build:ts && electron-builder",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "electron": "^32.0.0",
     "electron-builder": "^25.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.10"
   },
   "build": {
     "appId": "dev.elysion.bingwall",
@@ -37,5 +40,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
+  },
+  "dependencies": {
+    "wallpaper": "^7.3.1"
   }
 }

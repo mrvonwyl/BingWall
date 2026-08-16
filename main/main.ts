@@ -1,6 +1,9 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, screen } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setWallpaper } from 'wallpaper';
+import { runDailyUpdate } from './pipeline.js';
+import { getDataFolder, readMetadata, saveImage, writeMetadata } from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..', '..');
@@ -40,9 +43,24 @@ function createTray(): void {
   tray.on('click', () => mainWindow?.show());
 }
 
+async function refreshWallpaper(): Promise<void> {
+  const primaryDisplay = screen.getPrimaryDisplay();
+
+  await runDailyUpdate({
+    fetchImpl: fetch,
+    display: { width: primaryDisplay.size.width, height: primaryDisplay.size.height },
+    dataFolder: getDataFolder(),
+    readMetadata,
+    writeMetadata,
+    saveImage,
+    setWallpaper: (imagePath) => setWallpaper(imagePath, { scale: 'fill' }),
+  });
+}
+
 app.whenReady().then(() => {
   createTray();
   createWindow();
+  void refreshWallpaper();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
