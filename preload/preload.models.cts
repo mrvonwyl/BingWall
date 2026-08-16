@@ -38,4 +38,5 @@ export type BingWallAPI = {
   getDataFolder: () => Promise<string>;
   chooseDataFolder: () => Promise<string | null>;
   relocateDataFolder: (newFolder: string) => Promise<string>;
+  downloadWallpaper: (date: string) => Promise<string | null>;
 };

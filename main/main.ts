@@ -1,10 +1,12 @@
 import { app, BrowserWindow, Tray, Menu, dialog, ipcMain, nativeImage, powerMonitor, screen, shell } from 'electron';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setWallpaper } from 'wallpaper';
 import { readBootstrapPointer, writeBootstrapPointer } from './bootstrap.js';
 import { getCurrentWallpaper } from './currentWallpaper.js';
 import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
+import { downloadWallpaper } from './download.js';
 import { getHistory } from './history.js';
 import { runDailyUpdate } from './pipeline.js';
 import { describeRefreshError } from './refreshError.js';
@@ -178,6 +180,23 @@ ipcMain.handle('select-wallpaper', async (_event, date: string) => {
   });
 
   return toWallpaperPayload(result);
+});
+
+ipcMain.handle('download-wallpaper', async (_event, date: string) => {
+  const entries = await readMetadata(getDataFolder());
+  const metadata = entries.find((entry) => entry.date === date);
+
+  if (!metadata) {
+    return null;
+  }
+
+  const imagePath = path.join(getDataFolder(), `${date}.jpg`);
+  const result = await downloadWallpaper(metadata, imagePath, {
+    downloadsFolder: app.getPath('downloads'),
+    copyFile: (source, destination) => fs.copyFile(source, destination),
+  });
+
+  return result.destinationPath;
 });
 
 ipcMain.handle('get-settings', async () => {
