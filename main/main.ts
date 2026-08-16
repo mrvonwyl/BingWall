@@ -1,16 +1,18 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, powerMonitor, screen, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, dialog, ipcMain, nativeImage, powerMonitor, screen, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setWallpaper } from 'wallpaper';
+import { readBootstrapPointer, writeBootstrapPointer } from './bootstrap.js';
 import { getCurrentWallpaper } from './currentWallpaper.js';
 import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
 import { getHistory } from './history.js';
 import { runDailyUpdate } from './pipeline.js';
 import { describeRefreshError } from './refreshError.js';
 import { readSettings, writeSettings } from './settings.js';
+import type { Settings } from './settings.models.js';
 import { selectWallpaper } from './selectWallpaper.js';
 import { readState, writeState } from './state.js';
-import { deleteImage, getDataFolder, listImageDates, readMetadata, saveImage, writeMetadata } from './storage.js';
+import { deleteImage, getDefaultDataFolder, listImageDates, readMetadata, relocateDataFolder, saveImage, writeMetadata } from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..', '..');
@@ -20,6 +22,15 @@ const BACKGROUND_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let dataFolder = getDefaultDataFolder();
+
+function getDataFolder(): string {
+  return dataFolder;
+}
+
+function getAppDataFolder(): string {
+  return path.join(app.getPath('appData'), 'BingWall');
+}
 
 function createWindow(show: boolean): void {
   mainWindow = new BrowserWindow({
@@ -114,6 +125,7 @@ async function refreshWallpaper(): Promise<void> {
   await runDailyUpdate({
     fetchImpl: fetch,
     display: { width: primaryDisplay.size.width, height: primaryDisplay.size.height },
+    resolutionOverride: settings.resolutionOverride,
     dataFolder: getDataFolder(),
     dailyAutoRefresh: settings.dailyAutoRefresh,
     readMetadata,
@@ -172,7 +184,7 @@ ipcMain.handle('get-settings', async () => {
   return readSettings(getDataFolder());
 });
 
-ipcMain.handle('update-settings', async (_event, settings: { dailyAutoRefresh: boolean }) => {
+ipcMain.handle('update-settings', async (_event, settings: Settings) => {
   await writeSettings(getDataFolder(), settings);
   return settings;
 });
@@ -181,7 +193,35 @@ ipcMain.handle('refresh-wallpaper', async () => {
   return performRefresh();
 });
 
-app.whenReady().then(() => {
+ipcMain.handle('get-data-folder', () => {
+  return getDataFolder();
+});
+
+ipcMain.handle('choose-data-folder', async () => {
+  if (!mainWindow) {
+    return null;
+  }
+
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  return result.filePaths[0];
+});
+
+ipcMain.handle('relocate-data-folder', async (_event, newFolder: string) => {
+  await relocateDataFolder(getDataFolder(), newFolder);
+  dataFolder = newFolder;
+  await writeBootstrapPointer(getAppDataFolder(), { dataFolder });
+  return dataFolder;
+});
+
+app.whenReady().then(async () => {
+  const pointer = await readBootstrapPointer(getAppDataFolder(), getDefaultDataFolder());
+  dataFolder = pointer.dataFolder;
+  await writeBootstrapPointer(getAppDataFolder(), { dataFolder });
+
   createTray();
   createWindow(!app.getLoginItemSettings().wasOpenedAtLogin);
   void safeRefreshWallpaper();

@@ -3,8 +3,38 @@ import os from 'node:os';
 import path from 'node:path';
 import { MAX_RETAINED_ENTRIES, type StoredImageMetadata } from './storage.models.js';
 
-export function getDataFolder(): string {
+export function getDefaultDataFolder(): string {
   return path.join(os.homedir(), 'Pictures', 'BingWallpapers');
+}
+
+export async function relocateDataFolder(oldFolder: string, newFolder: string): Promise<void> {
+  await fs.mkdir(newFolder, { recursive: true });
+
+  let entries: string[];
+  try {
+    entries = await fs.readdir(oldFolder);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+
+  for (const entry of entries) {
+    const from = path.join(oldFolder, entry);
+    const to = path.join(newFolder, entry);
+    try {
+      await fs.rename(from, to);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EXDEV') {
+        throw error;
+      }
+      await fs.cp(from, to, { recursive: true });
+      await fs.rm(from, { recursive: true });
+    }
+  }
+
+  await fs.rmdir(oldFolder);
 }
 
 export function upsertMetadata(existing: StoredImageMetadata[], entry: StoredImageMetadata): StoredImageMetadata[] {

@@ -7,7 +7,7 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
   const images = await fetchBingImagesWithFallback(deps.fetchImpl);
   const newest = images[0];
 
-  const resolution = resolveImageResolution(deps.display);
+  const resolution = deps.resolutionOverride ?? resolveImageResolution(deps.display);
   const imageUrl = buildImageUrl(newest, resolution);
   const imageData = await downloadImage(deps.fetchImpl, imageUrl);
 
