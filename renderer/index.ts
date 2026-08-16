@@ -119,6 +119,27 @@ function renderRefreshButton(): void {
   });
 }
 
+function renderDownloadButton(): void {
+  const button = document.getElementById('download-button') as HTMLButtonElement;
+  const dateEl = document.getElementById('wallpaper-date') as HTMLElement;
+
+  button.addEventListener('click', () => {
+    void (async () => {
+      const date = dateEl.textContent;
+      if (!date) {
+        return;
+      }
+
+      button.disabled = true;
+      try {
+        await window.bingwall.downloadWallpaper(date);
+      } finally {
+        button.disabled = false;
+      }
+    })();
+  });
+}
+
 async function renderSettings(): Promise<void> {
   const checkbox = document.getElementById('auto-refresh-checkbox') as HTMLInputElement;
   const resolutionSelect = document.getElementById('resolution-select') as HTMLSelectElement;
@@ -183,6 +204,7 @@ async function render(): Promise<void> {
   await renderSettings();
   await renderDataFolder();
   renderRefreshButton();
+  renderDownloadButton();
   window.bingwall.onRefreshResult((result) => {
     void handleRefreshResult(result);
   });

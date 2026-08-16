@@ -14,6 +14,7 @@ const api: BingWallAPI = {
   getDataFolder: () => ipcRenderer.invoke('get-data-folder'),
   chooseDataFolder: () => ipcRenderer.invoke('choose-data-folder'),
   relocateDataFolder: (newFolder) => ipcRenderer.invoke('relocate-data-folder', newFolder),
+  downloadWallpaper: (date) => ipcRenderer.invoke('download-wallpaper', date),
 };
 
 contextBridge.exposeInMainWorld('bingwall', api);
