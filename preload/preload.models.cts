@@ -16,8 +16,11 @@ export type HistoryItemPayload = {
   imageUrl: string;
 };
 
+export type ImageResolution = '1024x768' | '1280x720' | '1366x768' | '1920x1080' | '1920x1200' | 'UHD';
+
 export type Settings = {
   dailyAutoRefresh: boolean;
+  resolutionOverride: ImageResolution | null;
 };
 
 export type RefreshResultPayload =
@@ -32,4 +35,7 @@ export type BingWallAPI = {
   updateSettings: (settings: Settings) => Promise<Settings>;
   refresh: () => Promise<RefreshResultPayload>;
   onRefreshResult: (callback: (result: RefreshResultPayload) => void) => void;
+  getDataFolder: () => Promise<string>;
+  chooseDataFolder: () => Promise<string | null>;
+  relocateDataFolder: (newFolder: string) => Promise<string>;
 };

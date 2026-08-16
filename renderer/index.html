@@ -21,10 +21,29 @@
     <div id="history" hidden>
       <div id="history-strip"></div>
     </div>
-    <label id="auto-refresh-toggle">
-      <input type="checkbox" id="auto-refresh-checkbox" />
-      Daily auto-refresh
-    </label>
+    <section id="settings">
+      <label id="auto-refresh-toggle">
+        <input type="checkbox" id="auto-refresh-checkbox" />
+        Daily auto-refresh
+      </label>
+      <div id="resolution-setting">
+        <label for="resolution-select">Resolution</label>
+        <select id="resolution-select">
+          <option value="">Auto (match display)</option>
+          <option value="1024x768">1024x768</option>
+          <option value="1280x720">1280x720</option>
+          <option value="1366x768">1366x768</option>
+          <option value="1920x1080">1920x1080</option>
+          <option value="1920x1200">1920x1200</option>
+          <option value="UHD">UHD</option>
+        </select>
+      </div>
+      <div id="data-folder-setting">
+        <label>Data folder</label>
+        <span id="data-folder-path"></span>
+        <button type="button" id="data-folder-change-button">Change…</button>
+      </div>
+    </section>
     <script type="module" src="../dist/renderer/index.js"></script>
   </body>
 </html>

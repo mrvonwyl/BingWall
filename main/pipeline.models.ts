@@ -1,9 +1,10 @@
-import type { DisplaySize, FetchImpl, StoredImageMetadata } from './bing.models.js';
+import type { DisplaySize, FetchImpl, ImageResolution, StoredImageMetadata } from './bing.models.js';
 import type { WallpaperState } from './state.models.js';
 
 export type RunDailyUpdateDeps = {
   fetchImpl: FetchImpl;
   display: DisplaySize;
+  resolutionOverride: ImageResolution | null;
   dataFolder: string;
   dailyAutoRefresh: boolean;
   readMetadata: (folder: string) => Promise<StoredImageMetadata[]>;

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { deleteImage, listImageDates, upsertMetadata } from './storage.js';
+import { deleteImage, listImageDates, relocateDataFolder, upsertMetadata } from './storage.js';
 import type { StoredImageMetadata } from './storage.models.js';
 
 function entry(date: string): StoredImageMetadata {
@@ -61,5 +61,27 @@ describe('listImageDates + deleteImage', () => {
   it('returns an empty list when the folder does not exist yet', async () => {
     const dates = await listImageDates('C:\\fake\\Pictures\\BingWallpapers');
     expect(dates).toEqual([]);
+  });
+});
+
+describe('relocateDataFolder', () => {
+  let oldFolder: string;
+  let newFolder: string;
+
+  afterEach(async () => {
+    await fs.rm(oldFolder, { recursive: true, force: true });
+    await fs.rm(newFolder, { recursive: true, force: true });
+  });
+
+  it('moves all files from the old folder into the new one', async () => {
+    oldFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-relocate-old-'));
+    newFolder = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-relocate-parent-')), 'moved');
+    await fs.writeFile(path.join(oldFolder, '2026-08-16.jpg'), 'a');
+    await fs.writeFile(path.join(oldFolder, 'metadata.json'), '[]');
+
+    await relocateDataFolder(oldFolder, newFolder);
+
+    expect((await fs.readdir(newFolder)).sort()).toEqual(['2026-08-16.jpg', 'metadata.json']);
+    await expect(fs.access(oldFolder)).rejects.toThrow();
   });
 });

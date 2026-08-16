@@ -24,6 +24,7 @@ function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateD
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     })),
     display: { width: 3840, height: 2160 },
+    resolutionOverride: null,
     dataFolder: 'C:\\fake\\Pictures\\BingWallpapers',
     dailyAutoRefresh: true,
     readMetadata: vi.fn(async () => []),
@@ -70,6 +71,14 @@ describe('runDailyUpdate', () => {
     expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
     expect(deps.writeState).toHaveBeenCalledWith(deps.dataFolder, { selectedDate: '2026-08-16' });
     expect(result.wallpaperChanged).toBe(true);
+  });
+
+  it('requests the overridden resolution instead of the one inferred from the display', async () => {
+    const deps = buildDeps({ resolutionOverride: '1280x720' });
+
+    await runDailyUpdate(deps);
+
+    expect(deps.fetchImpl).toHaveBeenCalledWith(expect.stringContaining('_1280x720.jpg'));
   });
 
   it('fetches and stores the image but leaves the wallpaper alone when daily auto-refresh is off', async () => {

@@ -121,11 +121,47 @@ function renderRefreshButton(): void {
 
 async function renderSettings(): Promise<void> {
   const checkbox = document.getElementById('auto-refresh-checkbox') as HTMLInputElement;
-  const settings = await window.bingwall.getSettings();
+  const resolutionSelect = document.getElementById('resolution-select') as HTMLSelectElement;
+  let settings = await window.bingwall.getSettings();
   checkbox.checked = settings.dailyAutoRefresh;
+  resolutionSelect.value = settings.resolutionOverride ?? '';
 
   checkbox.addEventListener('change', () => {
-    void window.bingwall.updateSettings({ dailyAutoRefresh: checkbox.checked });
+    void (async () => {
+      settings = await window.bingwall.updateSettings({ ...settings, dailyAutoRefresh: checkbox.checked });
+    })();
+  });
+
+  resolutionSelect.addEventListener('change', () => {
+    void (async () => {
+      const resolutionOverride =
+        resolutionSelect.value === '' ? null : (resolutionSelect.value as NonNullable<typeof settings.resolutionOverride>);
+      settings = await window.bingwall.updateSettings({ ...settings, resolutionOverride });
+    })();
+  });
+}
+
+async function renderDataFolder(): Promise<void> {
+  const pathEl = document.getElementById('data-folder-path') as HTMLElement;
+  const changeButton = document.getElementById('data-folder-change-button') as HTMLButtonElement;
+
+  pathEl.textContent = await window.bingwall.getDataFolder();
+
+  changeButton.addEventListener('click', () => {
+    void (async () => {
+      const chosen = await window.bingwall.chooseDataFolder();
+      if (!chosen) {
+        return;
+      }
+
+      changeButton.disabled = true;
+      try {
+        const newFolder = await window.bingwall.relocateDataFolder(chosen);
+        pathEl.textContent = newFolder;
+      } finally {
+        changeButton.disabled = false;
+      }
+    })();
   });
 }
 
@@ -145,6 +181,7 @@ async function render(): Promise<void> {
 
   await renderHistory(current?.metadata.date);
   await renderSettings();
+  await renderDataFolder();
   renderRefreshButton();
   window.bingwall.onRefreshResult((result) => {
     void handleRefreshResult(result);
