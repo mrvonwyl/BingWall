@@ -1,7 +1,8 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, screen } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen, shell } from 'electron';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setWallpaper } from 'wallpaper';
+import { getCurrentWallpaper } from './currentWallpaper.js';
 import { runDailyUpdate } from './pipeline.js';
 import { getDataFolder, readMetadata, saveImage, writeMetadata } from './storage.js';
 
@@ -16,8 +17,13 @@ function createWindow(): void {
     width: 900,
     height: 600,
     webPreferences: {
-      preload: path.join(projectRoot, 'dist', 'preload', 'preload.js'),
+      preload: path.join(projectRoot, 'dist', 'preload', 'preload.cjs'),
     },
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: 'deny' };
   });
 
   mainWindow.loadFile(path.join(projectRoot, 'renderer', 'index.html'));
@@ -56,6 +62,16 @@ async function refreshWallpaper(): Promise<void> {
     setWallpaper: (imagePath) => setWallpaper(imagePath, { scale: 'fill' }),
   });
 }
+
+ipcMain.handle('get-current-wallpaper', async () => {
+  const result = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata });
+
+  if (!result) {
+    return null;
+  }
+
+  return { metadata: result.metadata, imageUrl: pathToFileURL(result.imagePath).toString() };
+});
 
 app.whenReady().then(() => {
   createTray();
