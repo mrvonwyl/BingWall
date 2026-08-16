@@ -11,6 +11,7 @@ export async function selectWallpaper(date: string, deps: SelectWallpaperDeps): 
 
   const imagePath = path.join(deps.dataFolder, `${date}.jpg`);
   await deps.setWallpaper(imagePath);
+  await deps.writeState(deps.dataFolder, { selectedDate: date });
 
   return { metadata, imagePath };
 }

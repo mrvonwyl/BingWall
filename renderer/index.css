@@ -3,6 +3,23 @@ body {
   margin: 0;
 }
 
+#error-banner {
+  background: #fde7e9;
+  color: #86181d;
+  padding: 0.75rem 1.5rem;
+}
+
+#refresh-button {
+  margin: 1rem 1.5rem 0;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+#refresh-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 #wallpaper {
   display: flex;
   flex-direction: column;

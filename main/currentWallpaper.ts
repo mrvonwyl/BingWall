@@ -3,14 +3,17 @@ import type { CurrentWallpaperResult, GetCurrentWallpaperDeps } from './currentW
 
 export async function getCurrentWallpaper(deps: GetCurrentWallpaperDeps): Promise<CurrentWallpaperResult> {
   const entries = await deps.readMetadata(deps.dataFolder);
-  const newest = entries[0];
 
-  if (!newest) {
+  if (entries.length === 0) {
     return null;
   }
 
+  const state = await deps.readState(deps.dataFolder);
+  const selected = state ? entries.find((entry) => entry.date === state.selectedDate) : undefined;
+  const metadata = selected ?? entries[0];
+
   return {
-    metadata: newest,
-    imagePath: path.join(deps.dataFolder, `${newest.date}.jpg`),
+    metadata,
+    imagePath: path.join(deps.dataFolder, `${metadata.date}.jpg`),
   };
 }

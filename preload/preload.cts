@@ -7,6 +7,10 @@ const api: BingWallAPI = {
   selectWallpaper: (date) => ipcRenderer.invoke('select-wallpaper', date),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings) => ipcRenderer.invoke('update-settings', settings),
+  refresh: () => ipcRenderer.invoke('refresh-wallpaper'),
+  onRefreshResult: (callback) => {
+    ipcRenderer.on('refresh-result', (_event, result) => callback(result));
+  },
 };
 
 contextBridge.exposeInMainWorld('bingwall', api);
