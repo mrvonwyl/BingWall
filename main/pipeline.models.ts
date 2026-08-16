@@ -8,6 +8,8 @@ export type RunDailyUpdateDeps = {
   writeMetadata: (folder: string, entries: StoredImageMetadata[]) => Promise<void>;
   saveImage: (folder: string, date: string, data: ArrayBuffer) => Promise<string>;
   setWallpaper: (imagePath: string) => Promise<void>;
+  listImageDates: (folder: string) => Promise<string[]>;
+  deleteImage: (folder: string, date: string) => Promise<void>;
 };
 
 export type RunDailyUpdateResult = {

@@ -1,19 +1,7 @@
 import './index.models.js';
+import type { HistoryItemPayload } from './index.models.js';
 
-async function render(): Promise<void> {
-  const wallpaperEl = document.getElementById('wallpaper') as HTMLElement;
-  const emptyEl = document.getElementById('empty-state') as HTMLElement;
-  const current = await window.bingwall.getCurrentWallpaper();
-
-  if (!current) {
-    wallpaperEl.hidden = true;
-    emptyEl.hidden = false;
-    return;
-  }
-
-  wallpaperEl.hidden = false;
-  emptyEl.hidden = true;
-
+function renderWallpaperInfo(current: NonNullable<Awaited<ReturnType<typeof window.bingwall.getCurrentWallpaper>>>): void {
   const imageEl = document.getElementById('wallpaper-image') as HTMLImageElement;
   const dateEl = document.getElementById('wallpaper-date') as HTMLElement;
   const titleEl = document.getElementById('wallpaper-title') as HTMLElement;
@@ -37,6 +25,76 @@ async function render(): Promise<void> {
   } else {
     copyrightEl.textContent = current.metadata.copyright;
   }
+}
+
+async function renderHistory(activeDate: string | undefined): Promise<void> {
+  const historyEl = document.getElementById('history') as HTMLElement;
+  const stripEl = document.getElementById('history-strip') as HTMLElement;
+  const items = await window.bingwall.getHistory();
+
+  historyEl.hidden = items.length === 0;
+  stripEl.replaceChildren();
+
+  for (const item of items) {
+    stripEl.appendChild(buildThumbnail(item, item.metadata.date === activeDate));
+  }
+}
+
+function buildThumbnail(item: HistoryItemPayload, isActive: boolean): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'history-thumbnail';
+  button.classList.toggle('active', isActive);
+  button.setAttribute('aria-label', `${item.metadata.title} (${item.metadata.date})`);
+
+  const img = document.createElement('img');
+  img.src = item.imageUrl;
+  img.alt = '';
+  button.appendChild(img);
+
+  button.addEventListener('click', () => {
+    void handleThumbnailClick(item.metadata.date);
+  });
+
+  return button;
+}
+
+async function handleThumbnailClick(date: string): Promise<void> {
+  const selected = await window.bingwall.selectWallpaper(date);
+  if (!selected) {
+    return;
+  }
+
+  renderWallpaperInfo(selected);
+  await renderHistory(selected.metadata.date);
+}
+
+async function renderSettings(): Promise<void> {
+  const checkbox = document.getElementById('auto-refresh-checkbox') as HTMLInputElement;
+  const settings = await window.bingwall.getSettings();
+  checkbox.checked = settings.dailyAutoRefresh;
+
+  checkbox.addEventListener('change', () => {
+    void window.bingwall.updateSettings({ dailyAutoRefresh: checkbox.checked });
+  });
+}
+
+async function render(): Promise<void> {
+  const wallpaperEl = document.getElementById('wallpaper') as HTMLElement;
+  const emptyEl = document.getElementById('empty-state') as HTMLElement;
+  const current = await window.bingwall.getCurrentWallpaper();
+
+  if (!current) {
+    wallpaperEl.hidden = true;
+    emptyEl.hidden = false;
+  } else {
+    wallpaperEl.hidden = false;
+    emptyEl.hidden = true;
+    renderWallpaperInfo(current);
+  }
+
+  await renderHistory(current?.metadata.date);
+  await renderSettings();
 }
 
 void render();

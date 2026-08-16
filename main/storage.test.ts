@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { upsertMetadata } from './storage.js';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { deleteImage, listImageDates, upsertMetadata } from './storage.js';
 import type { StoredImageMetadata } from './storage.models.js';
 
 function entry(date: string): StoredImageMetadata {
@@ -30,5 +33,33 @@ describe('upsertMetadata', () => {
     expect(result).toHaveLength(8);
     expect(result.map((e) => e.date)).not.toContain('2026-08-01');
     expect(result[0].date).toBe('2026-08-09');
+  });
+});
+
+describe('listImageDates + deleteImage', () => {
+  let tempFolder: string;
+
+  afterEach(async () => {
+    if (tempFolder) {
+      await fs.rm(tempFolder, { recursive: true, force: true });
+    }
+  });
+
+  it('lists dates for .jpg files and ignores everything else, then can delete one', async () => {
+    tempFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-storage-'));
+    await fs.writeFile(path.join(tempFolder, '2026-08-16.jpg'), 'a');
+    await fs.writeFile(path.join(tempFolder, '2026-08-15.jpg'), 'b');
+    await fs.writeFile(path.join(tempFolder, 'metadata.json'), '[]');
+
+    const dates = await listImageDates(tempFolder);
+    expect(dates.sort()).toEqual(['2026-08-15', '2026-08-16']);
+
+    await deleteImage(tempFolder, '2026-08-15');
+    expect(await listImageDates(tempFolder)).toEqual(['2026-08-16']);
+  });
+
+  it('returns an empty list when the folder does not exist yet', async () => {
+    const dates = await listImageDates('C:\\fake\\Pictures\\BingWallpapers');
+    expect(dates).toEqual([]);
   });
 });
