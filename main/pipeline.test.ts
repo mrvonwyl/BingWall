@@ -25,12 +25,14 @@ function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateD
     })),
     display: { width: 3840, height: 2160 },
     dataFolder: 'C:\\fake\\Pictures\\BingWallpapers',
+    dailyAutoRefresh: true,
     readMetadata: vi.fn(async () => []),
     writeMetadata: vi.fn(async () => undefined),
     saveImage: vi.fn(async (folder: string, date: string) => `${folder}\\${date}.jpg`),
     setWallpaper: vi.fn(async () => undefined),
     listImageDates: vi.fn(async () => ['2026-08-16']),
     deleteImage: vi.fn(async () => undefined),
+    writeState: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -58,5 +60,26 @@ describe('runDailyUpdate', () => {
 
     expect(deps.deleteImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-01');
     expect(deps.deleteImage).not.toHaveBeenCalledWith(deps.dataFolder, '2026-08-16');
+  });
+
+  it('applies the wallpaper and records state when daily auto-refresh is on', async () => {
+    const deps = buildDeps({ dailyAutoRefresh: true });
+
+    const result = await runDailyUpdate(deps);
+
+    expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
+    expect(deps.writeState).toHaveBeenCalledWith(deps.dataFolder, { selectedDate: '2026-08-16' });
+    expect(result.wallpaperChanged).toBe(true);
+  });
+
+  it('fetches and stores the image but leaves the wallpaper alone when daily auto-refresh is off', async () => {
+    const deps = buildDeps({ dailyAutoRefresh: false });
+
+    const result = await runDailyUpdate(deps);
+
+    expect(deps.saveImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-16', expect.any(ArrayBuffer));
+    expect(deps.setWallpaper).not.toHaveBeenCalled();
+    expect(deps.writeState).not.toHaveBeenCalled();
+    expect(result.wallpaperChanged).toBe(false);
   });
 });

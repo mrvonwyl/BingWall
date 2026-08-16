@@ -3,10 +3,13 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setWallpaper } from 'wallpaper';
 import { getCurrentWallpaper } from './currentWallpaper.js';
+import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
 import { getHistory } from './history.js';
 import { runDailyUpdate } from './pipeline.js';
+import { describeRefreshError } from './refreshError.js';
 import { readSettings, writeSettings } from './settings.js';
 import { selectWallpaper } from './selectWallpaper.js';
+import { readState, writeState } from './state.js';
 import { deleteImage, getDataFolder, listImageDates, readMetadata, saveImage, writeMetadata } from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -92,38 +95,60 @@ function createTray(): void {
   });
 }
 
+function toWallpaperPayload(result: CurrentWallpaperResult) {
+  if (!result) {
+    return null;
+  }
+
+  return { metadata: result.metadata, imageUrl: pathToFileURL(result.imagePath).toString() };
+}
+
+type RefreshResult =
+  | { ok: true; current: ReturnType<typeof toWallpaperPayload> }
+  | { ok: false; error: string };
+
 async function refreshWallpaper(): Promise<void> {
   const primaryDisplay = screen.getPrimaryDisplay();
+  const settings = await readSettings(getDataFolder());
 
   await runDailyUpdate({
     fetchImpl: fetch,
     display: { width: primaryDisplay.size.width, height: primaryDisplay.size.height },
     dataFolder: getDataFolder(),
+    dailyAutoRefresh: settings.dailyAutoRefresh,
     readMetadata,
     writeMetadata,
     saveImage,
     setWallpaper: (imagePath) => setWallpaper(imagePath, { scale: 'fill' }),
     listImageDates,
     deleteImage,
+    writeState,
   });
 }
 
-async function safeRefreshWallpaper(): Promise<void> {
+async function performRefresh(): Promise<RefreshResult> {
+  let result: RefreshResult;
+
   try {
     await refreshWallpaper();
+    const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
+    result = { ok: true, current: toWallpaperPayload(current) };
   } catch (error) {
-    console.error('BingWall: background refresh failed', error);
+    console.error('BingWall: refresh failed', error);
+    result = { ok: false, error: describeRefreshError(error) };
   }
+
+  mainWindow?.webContents.send('refresh-result', result);
+  return result;
+}
+
+async function safeRefreshWallpaper(): Promise<void> {
+  await performRefresh();
 }
 
 ipcMain.handle('get-current-wallpaper', async () => {
-  const result = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata });
-
-  if (!result) {
-    return null;
-  }
-
-  return { metadata: result.metadata, imageUrl: pathToFileURL(result.imagePath).toString() };
+  const result = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
+  return toWallpaperPayload(result);
 });
 
 ipcMain.handle('get-history', async () => {
@@ -137,13 +162,10 @@ ipcMain.handle('select-wallpaper', async (_event, date: string) => {
     dataFolder: getDataFolder(),
     readMetadata,
     setWallpaper: (imagePath) => setWallpaper(imagePath, { scale: 'fill' }),
+    writeState,
   });
 
-  if (!result) {
-    return null;
-  }
-
-  return { metadata: result.metadata, imageUrl: pathToFileURL(result.imagePath).toString() };
+  return toWallpaperPayload(result);
 });
 
 ipcMain.handle('get-settings', async () => {
@@ -153,6 +175,10 @@ ipcMain.handle('get-settings', async () => {
 ipcMain.handle('update-settings', async (_event, settings: { dailyAutoRefresh: boolean }) => {
   await writeSettings(getDataFolder(), settings);
   return settings;
+});
+
+ipcMain.handle('refresh-wallpaper', async () => {
+  return performRefresh();
 });
 
 app.whenReady().then(() => {

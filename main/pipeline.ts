@@ -24,7 +24,10 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
     deleteImage: deps.deleteImage,
   });
 
-  await deps.setWallpaper(imagePath);
+  if (deps.dailyAutoRefresh) {
+    await deps.setWallpaper(imagePath);
+    await deps.writeState(deps.dataFolder, { selectedDate: metadata.date });
+  }
 
-  return { imagePath, metadata };
+  return { imagePath, metadata, wallpaperChanged: deps.dailyAutoRefresh };
 }
