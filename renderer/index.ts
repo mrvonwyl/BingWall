@@ -81,6 +81,21 @@ function clearError(): void {
   banner.textContent = '';
 }
 
+const SUCCESS_BANNER_DURATION_MS = 4000;
+let successBannerTimeout: ReturnType<typeof setTimeout> | undefined;
+
+function showSuccess(message: string): void {
+  const banner = document.getElementById('success-banner') as HTMLElement;
+  banner.textContent = message;
+  banner.hidden = false;
+
+  clearTimeout(successBannerTimeout);
+  successBannerTimeout = setTimeout(() => {
+    banner.hidden = true;
+    banner.textContent = '';
+  }, SUCCESS_BANNER_DURATION_MS);
+}
+
 async function handleRefreshResult(result: RefreshResultPayload): Promise<void> {
   if (!result.ok) {
     showError(result.error);
@@ -88,6 +103,7 @@ async function handleRefreshResult(result: RefreshResultPayload): Promise<void> 
   }
 
   clearError();
+  showSuccess('Wallpaper updated.');
 
   const wallpaperEl = document.getElementById('wallpaper') as HTMLElement;
   const emptyEl = document.getElementById('empty-state') as HTMLElement;
@@ -110,10 +126,12 @@ function renderRefreshButton(): void {
   button.addEventListener('click', () => {
     void (async () => {
       button.disabled = true;
+      button.classList.add('loading');
       try {
         await window.bingwall.refresh();
       } finally {
         button.disabled = false;
+        button.classList.remove('loading');
       }
     })();
   });
