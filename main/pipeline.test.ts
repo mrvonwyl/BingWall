@@ -15,6 +15,32 @@ const sampleResponse: HPImageArchiveResponse = {
   ],
 };
 
+const multiDayResponse: HPImageArchiveResponse = {
+  images: [
+    {
+      startdate: '20260816',
+      urlbase: '/th?id=OHR.Newest_EN-US1234567890',
+      copyright: 'Newest place (© Someone)',
+      copyrightlink: 'https://www.bing.com/search?q=newest',
+      title: 'Newest title',
+    },
+    {
+      startdate: '20260815',
+      urlbase: '/th?id=OHR.Middle_EN-US1234567890',
+      copyright: 'Middle place (© Someone)',
+      copyrightlink: 'https://www.bing.com/search?q=middle',
+      title: 'Middle title',
+    },
+    {
+      startdate: '20260814',
+      urlbase: '/th?id=OHR.Oldest_EN-US1234567890',
+      copyright: 'Oldest place (© Someone)',
+      copyrightlink: 'https://www.bing.com/search?q=oldest',
+      title: 'Oldest title',
+    },
+  ],
+};
+
 function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateDeps {
   return {
     fetchImpl: vi.fn(async () => ({
@@ -90,5 +116,54 @@ describe('runDailyUpdate', () => {
     expect(deps.setWallpaper).not.toHaveBeenCalled();
     expect(deps.writeState).not.toHaveBeenCalled();
     expect(result.wallpaperChanged).toBe(false);
+  });
+
+  it('backfills every image Bing returns, not just the newest', async () => {
+    const deps = buildDeps({
+      fetchImpl: vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => multiDayResponse,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      })),
+      readMetadata: vi.fn(async () => []),
+      listImageDates: vi.fn(async () => []),
+    });
+
+    const result = await runDailyUpdate(deps);
+
+    expect(deps.saveImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-16', expect.any(ArrayBuffer));
+    expect(deps.saveImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-15', expect.any(ArrayBuffer));
+    expect(deps.saveImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-14', expect.any(ArrayBuffer));
+    expect(deps.writeMetadata).toHaveBeenCalledWith(
+      deps.dataFolder,
+      expect.arrayContaining([
+        expect.objectContaining({ date: '2026-08-16' }),
+        expect.objectContaining({ date: '2026-08-15' }),
+        expect.objectContaining({ date: '2026-08-14' }),
+      ]),
+    );
+    expect(result.metadata.date).toBe('2026-08-16');
+  });
+
+  it('does not re-download images that are already stored', async () => {
+    const deps = buildDeps({
+      fetchImpl: vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => multiDayResponse,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      })),
+      readMetadata: vi.fn(async () => [
+        { date: '2026-08-15', title: 'Middle title', description: 'Middle place', copyright: '© Someone', copyrightlink: 'https://www.bing.com/search?q=middle' },
+        { date: '2026-08-14', title: 'Oldest title', description: 'Oldest place', copyright: '© Someone', copyrightlink: 'https://www.bing.com/search?q=oldest' },
+      ]),
+      listImageDates: vi.fn(async () => ['2026-08-15', '2026-08-14']),
+    });
+
+    await runDailyUpdate(deps);
+
+    expect(deps.saveImage).toHaveBeenCalledTimes(1);
+    expect(deps.saveImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-16', expect.any(ArrayBuffer));
   });
 });
