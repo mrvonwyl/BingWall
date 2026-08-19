@@ -1,8 +1,10 @@
 import { app, BrowserWindow, Tray, Menu, dialog, ipcMain, nativeImage, powerMonitor, screen, shell } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setWallpaper } from 'wallpaper';
+import { checkForUpdates } from './autoUpdate.js';
 import { readBootstrapPointer, writeBootstrapPointer } from './bootstrap.js';
 import { getCurrentWallpaper } from './currentWallpaper.js';
 import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
@@ -20,6 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..', '..');
 
 const BACKGROUND_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -248,6 +251,9 @@ app.whenReady().then(async () => {
   setInterval(() => void safeRefreshWallpaper(), BACKGROUND_REFRESH_INTERVAL_MS);
   powerMonitor.on('resume', () => void safeRefreshWallpaper());
   powerMonitor.on('unlock-screen', () => void safeRefreshWallpaper());
+
+  void checkForUpdates(autoUpdater);
+  setInterval(() => void checkForUpdates(autoUpdater), UPDATE_CHECK_INTERVAL_MS);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
