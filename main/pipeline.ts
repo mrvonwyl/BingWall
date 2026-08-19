@@ -16,7 +16,7 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
 
   let newestImagePath = path.join(deps.dataFolder, `${newestMetadata.date}.jpg`);
 
-  for (const entry of images) {
+  for (const entry of [...images].reverse()) {
     const metadata = toStoredMetadata(entry);
     if (existingDates.has(metadata.date)) {
       continue;

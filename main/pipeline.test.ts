@@ -146,6 +146,24 @@ describe('runDailyUpdate', () => {
     expect(result.metadata.date).toBe('2026-08-16');
   });
 
+  it('stores backfilled images newest first', async () => {
+    const deps = buildDeps({
+      fetchImpl: vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => multiDayResponse,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      })),
+      readMetadata: vi.fn(async () => []),
+      listImageDates: vi.fn(async () => []),
+    });
+
+    await runDailyUpdate(deps);
+
+    const writtenEntries = (deps.writeMetadata as ReturnType<typeof vi.fn>).mock.calls[0][1] as { date: string }[];
+    expect(writtenEntries.map((entry) => entry.date)).toEqual(['2026-08-16', '2026-08-15', '2026-08-14']);
+  });
+
   it('does not re-download images that are already stored', async () => {
     const deps = buildDeps({
       fetchImpl: vi.fn(async () => ({
