@@ -4,13 +4,13 @@ const { autoUpdater } = electronUpdater;
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { setWallpaper } from 'wallpaper';
 import { checkForUpdates } from './autoUpdate.js';
 import { readBootstrapPointer, writeBootstrapPointer } from './bootstrap.js';
 import { getCurrentWallpaper } from './currentWallpaper.js';
 import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
 import { downloadWallpaper } from './download.js';
 import { getHistory } from './history.js';
+import { setNativeWallpaper } from './nativeWallpaper.js';
 import { runDailyUpdate } from './pipeline.js';
 import { describeRefreshError } from './refreshError.js';
 import { readSettings, writeSettings } from './settings.js';
@@ -137,7 +137,7 @@ async function refreshWallpaper(): Promise<void> {
     readMetadata,
     writeMetadata,
     saveImage,
-    setWallpaper: (imagePath) => setWallpaper(imagePath, { scale: 'fill' }),
+    setWallpaper: setNativeWallpaper,
     listImageDates,
     deleteImage,
     writeState,
@@ -179,7 +179,7 @@ ipcMain.handle('select-wallpaper', async (_event, date: string) => {
   const result = await selectWallpaper(date, {
     dataFolder: getDataFolder(),
     readMetadata,
-    setWallpaper: (imagePath) => setWallpaper(imagePath, { scale: 'fill' }),
+    setWallpaper: setNativeWallpaper,
     writeState,
   });
 
