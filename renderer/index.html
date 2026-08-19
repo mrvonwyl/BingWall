@@ -6,8 +6,45 @@
     <link rel="stylesheet" href="index.css" />
   </head>
   <body>
-    <h1>BingWall</h1>
-    <p>Placeholder window — Phase 0 scaffolding.</p>
-    <script src="index.js"></script>
+    <div id="error-banner" role="alert" hidden></div>
+    <button type="button" id="refresh-button">Refresh</button>
+    <main id="wallpaper" hidden>
+      <img id="wallpaper-image" alt="" />
+      <div id="wallpaper-info">
+        <p id="wallpaper-date"></p>
+        <h1 id="wallpaper-title"></h1>
+        <p id="wallpaper-description"></p>
+        <p id="wallpaper-copyright"></p>
+        <button type="button" id="download-button">Download</button>
+      </div>
+    </main>
+    <p id="empty-state" hidden>No wallpaper yet. It will appear here once BingWall downloads today's image.</p>
+    <div id="history" hidden>
+      <div id="history-strip"></div>
+    </div>
+    <section id="settings">
+      <label id="auto-refresh-toggle">
+        <input type="checkbox" id="auto-refresh-checkbox" />
+        Daily auto-refresh
+      </label>
+      <div id="resolution-setting">
+        <label for="resolution-select">Resolution</label>
+        <select id="resolution-select">
+          <option value="">Auto (match display)</option>
+          <option value="1024x768">1024x768</option>
+          <option value="1280x720">1280x720</option>
+          <option value="1366x768">1366x768</option>
+          <option value="1920x1080">1920x1080</option>
+          <option value="1920x1200">1920x1200</option>
+          <option value="UHD">UHD</option>
+        </select>
+      </div>
+      <div id="data-folder-setting">
+        <label>Data folder</label>
+        <span id="data-folder-path"></span>
+        <button type="button" id="data-folder-change-button">Change…</button>
+      </div>
+    </section>
+    <script type="module" src="../dist/renderer/index.js"></script>
   </body>
 </html>

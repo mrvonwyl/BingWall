@@ -8,15 +8,18 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "build:ts": "tsc -p tsconfig.json",
+    "build:ts": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json",
     "start": "npm run build:ts && electron .",
-    "build": "npm run build:ts && electron-builder"
+    "build": "npm run build:ts && electron-builder",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.preload.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "electron": "^32.0.0",
     "electron-builder": "^25.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.10"
   },
   "build": {
     "appId": "dev.elysion.bingwall",
@@ -24,18 +27,32 @@
     "directories": {
       "output": "release"
     },
+    "asar": false,
     "files": [
       "dist/**/*",
       "renderer/**/*",
       "build/icon.png",
       "package.json"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "mrvonwyl",
+      "repo": "BingWall"
+    },
     "win": {
       "target": "nsis"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BingWall"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "wallpaper": "^7.3.1"
   }
 }
