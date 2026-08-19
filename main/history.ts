@@ -3,8 +3,9 @@ import type { GetHistoryDeps, HistoryItem, PruneOrphanedImagesDeps } from './his
 
 export async function getHistory(deps: GetHistoryDeps): Promise<HistoryItem[]> {
   const entries = await deps.readMetadata(deps.dataFolder);
+  const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
 
-  return entries.map((metadata) => ({
+  return sorted.map((metadata) => ({
     metadata,
     imagePath: path.join(deps.dataFolder, `${metadata.date}.jpg`),
   }));
