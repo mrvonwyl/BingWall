@@ -3,7 +3,7 @@ import type { WallpaperState } from './state.models.js';
 
 export type RunDailyUpdateDeps = {
   fetchImpl: FetchImpl;
-  display: DisplaySize;
+  displays: DisplaySize[];
   resolutionOverride: ImageResolution | null;
   dataFolder: string;
   dailyAutoRefresh: boolean;

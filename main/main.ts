@@ -125,12 +125,12 @@ type RefreshResult =
   | { ok: false; error: string };
 
 async function refreshWallpaper(): Promise<void> {
-  const primaryDisplay = screen.getPrimaryDisplay();
+  const displays = screen.getAllDisplays().map((display) => ({ width: display.size.width, height: display.size.height }));
   const settings = await readSettings(getDataFolder());
 
   await runDailyUpdate({
     fetchImpl: fetch,
-    display: { width: primaryDisplay.size.width, height: primaryDisplay.size.height },
+    displays,
     resolutionOverride: settings.resolutionOverride,
     dataFolder: getDataFolder(),
     dailyAutoRefresh: settings.dailyAutoRefresh,

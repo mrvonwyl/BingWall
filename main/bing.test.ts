@@ -74,16 +74,41 @@ describe('fetchBingImagesWithFallback', () => {
 
 describe('resolveImageResolution', () => {
   it('defaults to UHD when the display is at or above 4K', () => {
-    expect(resolveImageResolution({ width: 3840, height: 2160 })).toBe('UHD');
+    expect(resolveImageResolution([{ width: 3840, height: 2160 }], null)).toBe('UHD');
   });
 
   it('picks the closest known resolution not exceeding the display size', () => {
-    expect(resolveImageResolution({ width: 1920, height: 1080 })).toBe('1920x1080');
-    expect(resolveImageResolution({ width: 1366, height: 768 })).toBe('1366x768');
+    expect(resolveImageResolution([{ width: 1920, height: 1080 }], null)).toBe('1920x1080');
+    expect(resolveImageResolution([{ width: 1366, height: 768 }], null)).toBe('1366x768');
   });
 
   it('falls back to the smallest known resolution for very small displays', () => {
-    expect(resolveImageResolution({ width: 320, height: 240 })).toBe('1024x768');
+    expect(resolveImageResolution([{ width: 320, height: 240 }], null)).toBe('1024x768');
+  });
+
+  it('sizes the resolution for the largest of multiple connected displays', () => {
+    expect(
+      resolveImageResolution(
+        [
+          { width: 1366, height: 768 },
+          { width: 3840, height: 2160 },
+          { width: 1920, height: 1080 },
+        ],
+        null,
+      ),
+    ).toBe('UHD');
+  });
+
+  it('returns the resolutionOverride untouched regardless of the display list', () => {
+    expect(
+      resolveImageResolution(
+        [
+          { width: 3840, height: 2160 },
+          { width: 1920, height: 1080 },
+        ],
+        '1280x720',
+      ),
+    ).toBe('1280x720');
   });
 });
 
