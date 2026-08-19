@@ -7,7 +7,7 @@ function entry(date: string): StoredImageMetadata {
 }
 
 describe('getHistory', () => {
-  it('returns each retained entry with its image path, in metadata order', async () => {
+  it('returns each retained entry with its image path, newest date first', async () => {
     const readMetadata = vi.fn(async () => [entry('2026-08-16'), entry('2026-08-15')]);
 
     const result = await getHistory({ dataFolder: 'C:\\fake\\Pictures\\BingWallpapers', readMetadata });
@@ -16,6 +16,14 @@ describe('getHistory', () => {
       { metadata: entry('2026-08-16'), imagePath: 'C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg' },
       { metadata: entry('2026-08-15'), imagePath: 'C:\\fake\\Pictures\\BingWallpapers\\2026-08-15.jpg' },
     ]);
+  });
+
+  it('sorts by date descending regardless of the order stored on disk', async () => {
+    const readMetadata = vi.fn(async () => [entry('2026-08-14'), entry('2026-08-16'), entry('2026-08-15')]);
+
+    const result = await getHistory({ dataFolder: 'C:\\fake\\Pictures\\BingWallpapers', readMetadata });
+
+    expect(result.map((item) => item.metadata.date)).toEqual(['2026-08-16', '2026-08-15', '2026-08-14']);
   });
 });
 
