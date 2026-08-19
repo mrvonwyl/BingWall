@@ -27,6 +27,7 @@
     "directories": {
       "output": "release"
     },
+    "asar": false,
     "files": [
       "dist/**/*",
       "renderer/**/*",
