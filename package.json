@@ -53,6 +53,6 @@
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
-    "wallpaper": "^7.3.1"
+    "koffi": "^3.1.5"
   }
 }

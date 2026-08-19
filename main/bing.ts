@@ -38,13 +38,24 @@ export async function fetchBingImagesWithFallback(fetchImpl: FetchImpl): Promise
   return fetchBingImages(fetchImpl, 'de-DE');
 }
 
-export function resolveImageResolution(display: DisplaySize): ImageResolution {
-  if (display.width >= UHD_THRESHOLD.width && display.height >= UHD_THRESHOLD.height) {
+export function resolveImageResolution(
+  displays: DisplaySize[],
+  resolutionOverride: ImageResolution | null,
+): ImageResolution {
+  if (resolutionOverride) {
+    return resolutionOverride;
+  }
+
+  const largest = displays.reduce((best, candidate) =>
+    candidate.width * candidate.height > best.width * best.height ? candidate : best,
+  );
+
+  if (largest.width >= UHD_THRESHOLD.width && largest.height >= UHD_THRESHOLD.height) {
     return 'UHD';
   }
 
   const fitting = KNOWN_RESOLUTIONS.filter(
-    (candidate) => candidate.width <= display.width && candidate.height <= display.height,
+    (candidate) => candidate.width <= largest.width && candidate.height <= largest.height,
   );
 
   if (fitting.length === 0) {

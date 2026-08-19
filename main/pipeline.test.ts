@@ -49,7 +49,7 @@ function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateD
       json: async () => sampleResponse,
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     })),
-    display: { width: 3840, height: 2160 },
+    displays: [{ width: 3840, height: 2160 }],
     resolutionOverride: null,
     dataFolder: 'C:\\fake\\Pictures\\BingWallpapers',
     dailyAutoRefresh: true,

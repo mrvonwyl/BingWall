@@ -9,7 +9,7 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
   const newest = images[0];
   const newestMetadata = toStoredMetadata(newest);
 
-  const resolution = deps.resolutionOverride ?? resolveImageResolution(deps.display);
+  const resolution = resolveImageResolution(deps.displays, deps.resolutionOverride);
 
   let retained = await deps.readMetadata(deps.dataFolder);
   const existingDates = new Set(retained.map((entry) => entry.date));
