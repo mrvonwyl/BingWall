@@ -38,6 +38,7 @@ const POINTER_SIZE = koffi.sizeof('void *');
 const VTABLE_RELEASE = 2;
 const VTABLE_SET_WALLPAPER = 3;
 const VTABLE_GET_MONITOR_DEVICE_PATH_AT = 5;
+const VTABLE_GET_MONITOR_DEVICE_PATH_COUNT = 6;
 const VTABLE_SET_POSITION = 10;
 
 const ole32 = koffi.load('ole32.dll');
@@ -55,6 +56,9 @@ const SetWallpaperProto = koffi.proto(
 );
 const GetMonitorDevicePathAtProto = koffi.proto(
   'long __stdcall GetMonitorDevicePathAtProto(void *self, uint32_t monitorIndex, _Out_ void **monitorId)',
+);
+const GetMonitorDevicePathCountProto = koffi.proto(
+  'long __stdcall GetMonitorDevicePathCountProto(void *self, _Out_ uint32_t *count)',
 );
 
 let comInitialized = false;
@@ -96,39 +100,52 @@ export async function setNativeWallpaper(imagePath: string): Promise<void> {
   }
 
   try {
-    const monitorIdPtr: unknown[] = [null];
-    const getMonitorHr: number = koffi.call(
-      vtableMethod(desktopWallpaper, VTABLE_GET_MONITOR_DEVICE_PATH_AT),
-      GetMonitorDevicePathAtProto,
+    const setPositionHr: number = koffi.call(
+      vtableMethod(desktopWallpaper, VTABLE_SET_POSITION),
+      SetPositionProto,
       desktopWallpaper,
-      0,
-      monitorIdPtr,
+      DWPOS_FILL,
     );
-    throwIfFailed(getMonitorHr, 'IDesktopWallpaper::GetMonitorDevicePathAt');
+    throwIfFailed(setPositionHr, 'IDesktopWallpaper::SetPosition');
 
-    const monitorId = monitorIdPtr[0];
-    try {
-      const monitorIdString = monitorId ? koffi.decode.wstring(monitorId) : null;
+    const countPtr: number[] = [0];
+    const getCountHr: number = koffi.call(
+      vtableMethod(desktopWallpaper, VTABLE_GET_MONITOR_DEVICE_PATH_COUNT),
+      GetMonitorDevicePathCountProto,
+      desktopWallpaper,
+      countPtr,
+    );
+    throwIfFailed(getCountHr, 'IDesktopWallpaper::GetMonitorDevicePathCount');
 
-      const setPositionHr: number = koffi.call(
-        vtableMethod(desktopWallpaper, VTABLE_SET_POSITION),
-        SetPositionProto,
+    const monitorCount = countPtr[0];
+
+    for (let monitorIndex = 0; monitorIndex < monitorCount; monitorIndex++) {
+      const monitorIdPtr: unknown[] = [null];
+      const getMonitorHr: number = koffi.call(
+        vtableMethod(desktopWallpaper, VTABLE_GET_MONITOR_DEVICE_PATH_AT),
+        GetMonitorDevicePathAtProto,
         desktopWallpaper,
-        DWPOS_FILL,
+        monitorIndex,
+        monitorIdPtr,
       );
-      throwIfFailed(setPositionHr, 'IDesktopWallpaper::SetPosition');
+      throwIfFailed(getMonitorHr, 'IDesktopWallpaper::GetMonitorDevicePathAt');
 
-      const setWallpaperHr: number = koffi.call(
-        vtableMethod(desktopWallpaper, VTABLE_SET_WALLPAPER),
-        SetWallpaperProto,
-        desktopWallpaper,
-        monitorIdString,
-        imagePath,
-      );
-      throwIfFailed(setWallpaperHr, 'IDesktopWallpaper::SetWallpaper');
-    } finally {
-      if (monitorId) {
-        CoTaskMemFree(monitorId);
+      const monitorId = monitorIdPtr[0];
+      try {
+        const monitorIdString = monitorId ? koffi.decode.wstring(monitorId) : null;
+
+        const setWallpaperHr: number = koffi.call(
+          vtableMethod(desktopWallpaper, VTABLE_SET_WALLPAPER),
+          SetWallpaperProto,
+          desktopWallpaper,
+          monitorIdString,
+          imagePath,
+        );
+        throwIfFailed(setWallpaperHr, 'IDesktopWallpaper::SetWallpaper');
+      } finally {
+        if (monitorId) {
+          CoTaskMemFree(monitorId);
+        }
       }
     }
   } finally {
