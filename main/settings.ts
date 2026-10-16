@@ -7,7 +7,7 @@ export async function readSettings(folder: string): Promise<Settings> {
     const raw = await fs.readFile(path.join(folder, 'settings.json'), 'utf-8');
     return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) {
       return DEFAULT_SETTINGS;
     }
     throw error;
@@ -16,5 +16,8 @@ export async function readSettings(folder: string): Promise<Settings> {
 
 export async function writeSettings(folder: string, settings: Settings): Promise<void> {
   await fs.mkdir(folder, { recursive: true });
-  await fs.writeFile(path.join(folder, 'settings.json'), JSON.stringify(settings, null, 2), 'utf-8');
+  const target = path.join(folder, 'settings.json');
+  const tempFile = `${target}.${process.pid}.tmp`;
+  await fs.writeFile(tempFile, JSON.stringify(settings, null, 2), 'utf-8');
+  await fs.rename(tempFile, target);
 }

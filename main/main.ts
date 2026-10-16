@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkForUpdates } from './autoUpdate.js';
 import { readBootstrapPointer, writeBootstrapPointer } from './bootstrap.js';
 import { getCurrentWallpaper } from './currentWallpaper.js';
+import { watchForDevReload } from './devReload.js';
 import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
 import { downloadWallpaper } from './download.js';
 import { getHistory } from './history.js';
@@ -248,6 +249,10 @@ app.whenReady().then(async () => {
   createTray();
   createWindow(!app.getLoginItemSettings().wasOpenedAtLogin);
   void safeRefreshWallpaper();
+
+  if (!app.isPackaged && process.env.BINGWALL_DEV_RELOAD === '1') {
+    watchForDevReload(projectRoot, () => mainWindow);
+  }
 
   setInterval(() => void safeRefreshWallpaper(), BACKGROUND_REFRESH_INTERVAL_MS);
   powerMonitor.on('resume', () => void safeRefreshWallpaper());

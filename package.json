@@ -10,12 +10,15 @@
   "scripts": {
     "build:ts": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json",
     "start": "npm run build:ts && electron .",
+    "dev": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/dev.ts",
+    "kill:electron": "taskkill /F /IM electron.exe /T",
     "build": "npm run build:ts && electron-builder",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.preload.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.scripts.json"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "chokidar": "^5.0.0",
     "electron": "^32.0.0",
     "electron-builder": "^25.0.0",
     "typescript": "^5.5.0",
