@@ -7,7 +7,7 @@ export async function readState(folder: string): Promise<WallpaperState | null> 
     const raw = await fs.readFile(path.join(folder, 'state.json'), 'utf-8');
     return JSON.parse(raw) as WallpaperState;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) {
       return null;
     }
     throw error;
@@ -16,5 +16,8 @@ export async function readState(folder: string): Promise<WallpaperState | null> 
 
 export async function writeState(folder: string, state: WallpaperState): Promise<void> {
   await fs.mkdir(folder, { recursive: true });
-  await fs.writeFile(path.join(folder, 'state.json'), JSON.stringify(state, null, 2), 'utf-8');
+  const target = path.join(folder, 'state.json');
+  const tempFile = `${target}.${process.pid}.tmp`;
+  await fs.writeFile(tempFile, JSON.stringify(state, null, 2), 'utf-8');
+  await fs.rename(tempFile, target);
 }

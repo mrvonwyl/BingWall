@@ -7,7 +7,7 @@ export async function readBootstrapPointer(appDataFolder: string, defaultDataFol
     const raw = await fs.readFile(path.join(appDataFolder, 'bootstrap.json'), 'utf-8');
     return JSON.parse(raw) as BootstrapPointer;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) {
       return { dataFolder: defaultDataFolder };
     }
     throw error;
@@ -16,5 +16,8 @@ export async function readBootstrapPointer(appDataFolder: string, defaultDataFol
 
 export async function writeBootstrapPointer(appDataFolder: string, pointer: BootstrapPointer): Promise<void> {
   await fs.mkdir(appDataFolder, { recursive: true });
-  await fs.writeFile(path.join(appDataFolder, 'bootstrap.json'), JSON.stringify(pointer, null, 2), 'utf-8');
+  const target = path.join(appDataFolder, 'bootstrap.json');
+  const tempFile = `${target}.${process.pid}.tmp`;
+  await fs.writeFile(tempFile, JSON.stringify(pointer, null, 2), 'utf-8');
+  await fs.rename(tempFile, target);
 }

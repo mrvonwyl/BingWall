@@ -47,7 +47,7 @@ export async function readMetadata(folder: string): Promise<StoredImageMetadata[
     const raw = await fs.readFile(path.join(folder, 'metadata.json'), 'utf-8');
     return JSON.parse(raw) as StoredImageMetadata[];
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) {
       return [];
     }
     throw error;
@@ -56,7 +56,10 @@ export async function readMetadata(folder: string): Promise<StoredImageMetadata[
 
 export async function writeMetadata(folder: string, entries: StoredImageMetadata[]): Promise<void> {
   await fs.mkdir(folder, { recursive: true });
-  await fs.writeFile(path.join(folder, 'metadata.json'), JSON.stringify(entries, null, 2), 'utf-8');
+  const target = path.join(folder, 'metadata.json');
+  const tempFile = `${target}.${process.pid}.tmp`;
+  await fs.writeFile(tempFile, JSON.stringify(entries, null, 2), 'utf-8');
+  await fs.rename(tempFile, target);
 }
 
 export async function saveImage(folder: string, date: string, data: ArrayBuffer): Promise<string> {
