@@ -6,30 +6,133 @@
     <link rel="stylesheet" href="index.css" />
   </head>
   <body>
-    <div id="error-banner" role="alert" hidden></div>
-    <div id="success-banner" role="status" hidden></div>
-    <button type="button" id="refresh-button">Refresh</button>
+    <div id="backdrop" aria-hidden="true">
+      <div class="backdrop-layer"></div>
+      <div class="backdrop-layer"></div>
+    </div>
+    <div id="scrim" aria-hidden="true"></div>
+
     <main id="wallpaper" hidden>
-      <img id="wallpaper-image" alt="" />
       <div id="wallpaper-info">
         <p id="wallpaper-date"></p>
         <h1 id="wallpaper-title"></h1>
         <p id="wallpaper-description"></p>
         <p id="wallpaper-copyright"></p>
-        <button type="button" id="download-button">Download</button>
       </div>
     </main>
-    <p id="empty-state" hidden>No wallpaper yet. It will appear here once BingWall downloads today's image.</p>
-    <div id="history" hidden>
-      <div id="history-strip"></div>
+    <p id="empty-state" hidden>
+      No wallpaper yet. It will appear here once BingWall downloads today's
+      image.
+    </p>
+
+    <div id="toolbar">
+      <button
+        type="button"
+        id="download-button"
+        class="icon-button"
+        title="Save to Downloads"
+        aria-label="Save to Downloads"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        id="refresh-button"
+        class="icon-button"
+        title="Refresh now"
+        aria-label="Refresh now"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.5h-4.5" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        id="settings-button"
+        class="icon-button"
+        title="Settings"
+        aria-label="Settings"
+        aria-controls="settings"
+        aria-expanded="false"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+          />
+        </svg>
+      </button>
     </div>
-    <section id="settings">
-      <label id="auto-refresh-toggle">
-        <input type="checkbox" id="auto-refresh-checkbox" />
-        Daily auto-refresh
-      </label>
-      <div id="resolution-setting">
-        <label for="resolution-select">Resolution</label>
+
+    <div id="toasts">
+      <div id="error-banner" class="toast" role="alert" hidden></div>
+      <div id="success-banner" class="toast" role="status" hidden></div>
+    </div>
+
+    <div id="history" hidden>
+      <button
+        type="button"
+        id="history-prev"
+        class="history-arrow"
+        aria-label="Previous wallpaper"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m15 5-7 7 7 7" />
+        </svg>
+      </button>
+      <div
+        id="history-viewport"
+        tabindex="0"
+        role="listbox"
+        aria-label="Wallpaper history"
+        aria-orientation="horizontal"
+      >
+        <div id="history-strip"></div>
+      </div>
+      <button
+        type="button"
+        id="history-next"
+        class="history-arrow"
+        aria-label="Next wallpaper"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m9 5 7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+
+    <div id="settings-overlay" hidden></div>
+    <aside id="settings" aria-label="Settings" aria-hidden="true" inert>
+      <header id="settings-header">
+        <h2>Settings</h2>
+        <button
+          type="button"
+          id="settings-close-button"
+          class="icon-button"
+          aria-label="Close settings"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </header>
+
+      <section class="setting">
+        <label id="auto-refresh-toggle" class="switch-row">
+          <span>
+            <span class="setting-label">Daily auto-refresh</span>
+            <span class="setting-hint"
+              >Apply each new Bing image as your desktop wallpaper.</span
+            >
+          </span>
+          <input type="checkbox" id="auto-refresh-checkbox" role="switch" />
+        </label>
+      </section>
+
+      <section class="setting" id="resolution-setting">
+        <label for="resolution-select" class="setting-label">Resolution</label>
         <select id="resolution-select">
           <option value="">Auto (match display)</option>
           <option value="1024x768">1024x768</option>
@@ -39,13 +142,21 @@
           <option value="1920x1200">1920x1200</option>
           <option value="UHD">UHD</option>
         </select>
-      </div>
-      <div id="data-folder-setting">
-        <label>Data folder</label>
+      </section>
+
+      <section class="setting" id="data-folder-setting">
+        <span class="setting-label">Data folder</span>
         <span id="data-folder-path"></span>
-        <button type="button" id="data-folder-change-button">Change…</button>
-      </div>
-    </section>
+        <button
+          type="button"
+          id="data-folder-change-button"
+          class="text-button"
+        >
+          Change…
+        </button>
+      </section>
+    </aside>
+
     <script type="module" src="../dist/renderer/index.js"></script>
   </body>
 </html>

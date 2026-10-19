@@ -41,13 +41,20 @@ function getAppDataFolder(): string {
 
 function createWindow(show: boolean): void {
   mainWindow = new BrowserWindow({
-    width: 900,
-    height: 600,
+    width: 1280,
+    height: 720,
+    minWidth: 800,
+    minHeight: 450,
+    useContentSize: true,
+    autoHideMenuBar: true,
+    backgroundColor: '#000000',
     show,
     webPreferences: {
       preload: path.join(projectRoot, 'dist', 'preload', 'preload.cjs'),
     },
   });
+
+  mainWindow.setAspectRatio(16 / 9);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
