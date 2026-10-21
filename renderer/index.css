@@ -25,7 +25,8 @@ html,
 body {
   height: 100%;
   margin: 0;
-  overflow: hidden;
+  /* clip, not hidden: hidden still lets focus() scroll the page to reveal the off-screen settings pane. */
+  overflow: clip;
 }
 
 body {

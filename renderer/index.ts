@@ -273,12 +273,12 @@ function renderSettingsPane(): void {
     openButton.setAttribute("aria-expanded", String(open));
 
     if (open) {
-      closeButton.focus();
+      closeButton.focus({ preventScroll: true });
     } else if (
       pane.contains(document.activeElement) ||
       document.activeElement === document.body
     ) {
-      openButton.focus();
+      openButton.focus({ preventScroll: true });
     }
   };
 
