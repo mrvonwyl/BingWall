@@ -8,7 +8,12 @@ the applier can rerun it and compare against the recorded baseline.
 ```powershell
 npm run profile:wallpaper                       # 3 rounds, two newest JPGs from ~/Pictures/BingWallpapers
 npm run profile:wallpaper -- --rounds 5 --sources C:\a.jpg,C:\b.jpg --settle 1500 --out C:\somewhere
+npm run profile:wallpaper -- --variants full-jpg/per-monitor,full-jpg/spi --label autocolorization-off
 ```
+
+`--variants` picks a subset by name (spaces removed). `--label` names the machine
+state in the report. The report also records `AutoColorization`, transparency,
+Dynamic Lighting and any known RGB or wallpaper tools that are running.
 
 It changes the real wallpaper many times and puts the original back at the end.
 Before running, quit BingWall (it would apply wallpapers too) and leave most of
@@ -58,6 +63,12 @@ images so every apply visibly changes the desktop:
 | `full-bmp / per-monitor` | uncompressed 24-bit BMP at source resolution | one per monitor |
 | `full-bmp / all` | same | single `NULL` call |
 | `prescaled-bmp / per-monitor` | 24-bit BMP at each monitor's resolution | one per monitor |
+| `full-jpg / spi` | Bing JPG | `WallpaperStyle`/`TileWallpaper` in the registry, then `SystemParametersInfoW(SPI_SETDESKWALLPAPER, SPIF_UPDATEINIFILE \| SPIF_SENDCHANGE)` |
+| `full-jpg / active-desktop` | Bing JPG | `IActiveDesktop` `SetWallpaper` + `SetWallpaperOptions(CROPTOFIT)` + `ApplyChanges(ALL \| FORCE \| BUFFERED_REFRESH)` |
+
+Each trial also records whether the accent colour (`Explorer\Accent\AccentColorMenu`)
+changed. A trial whose apply call throws is kept, with the error and the stages that
+finished before it.
 
 `GetMonitorDevicePathCount` also counts monitors Windows remembers but that aren't
 attached. Per-monitor mode still calls `SetWallpaper` for them, as the app does.
@@ -99,3 +110,47 @@ Medians in ms, over 3 trials per variant:
 - **Caveats.** Only about 220 of the 2304 grid cells showed the change, because most
   of the desktop was covered by windows. DWM CPU wasn't captured; that needs an
   elevated shell. The Explorer hang was measured on `Progman`'s thread only.
+
+## APIs and machine state (2026-10-21)
+
+Reports: [default](results/2026-10-21-apis-default.md),
+[AutoColorization off](results/2026-10-21-apis-autocolorization-off.md) and
+[SignalRGB closed](results/2026-10-21-apis-signalrgb-closed.md). Each is 3 rounds of
+the three APIs with a full-size JPG. Medians in ms:
+
+| API | Machine state | Main-thread block | First visible change | Explorer CPU | Worst Explorer hang | Accent changed |
+|---|---|---|---|---|---|---|
+| IDesktopWallpaper per monitor (today) | default | 4.2 | 1574 | 1594 | 675 | 3/3 |
+| SystemParametersInfo | default | 1343 | 435 | 594 | 296 | 3/3 |
+| IActiveDesktop | default | 4955 | 2014 | 2953 | 1367 | 3/3 |
+| IDesktopWallpaper per monitor | **AutoColorization off** | 4.4 | **465** | 234 | 64 | 0/3 |
+| SystemParametersInfo | **AutoColorization off** | 997 | **99** | 109 | 49 | 0/3 |
+| IActiveDesktop | **AutoColorization off** | 973 | **108** | 141 | 49 | 0/3 |
+| IDesktopWallpaper per monitor | SignalRGB closed | 4.3 | 1527 | 1000 | 980 | 3/3 |
+| SystemParametersInfo | SignalRGB closed | 3554 | 1428 | 1797 | 767 | 3/3 |
+| IActiveDesktop | SignalRGB closed | 4376 | 1765 | 2719 | 1037 | 3/3 |
+
+- **Most of the slowness and the freeze come from the accent colour, not the wallpaper.**
+  With "pick an accent colour from my background" on (`AutoColorization = 1`), every
+  wallpaper change makes Explorer derive and broadcast a new accent colour. Turning it
+  off cuts Explorer CPU by roughly 7–25× and stops the Explorer hangs. The desktop also
+  changes in about 100 ms with SPI or IActiveDesktop, and about 465 ms with
+  IDesktopWallpaper.
+- **The ~4.8 s "crossfade" in the first baseline is probably the accent change too.**
+  The watched area includes the taskbar and the accent-coloured window borders.
+- **Closing SignalRGB doesn't help.** Its service and Dynamic Lighting kept running;
+  Dynamic Lighting follows the accent colour here, but it wasn't isolated.
+- **SystemParametersInfo is the fastest path, but it blocks the calling thread.**
+  `SPIF_SENDCHANGE` broadcasts `WM_SETTINGCHANGE` and waits for every top-level window:
+  ~1 s even with no accent change, up to ~5 s with one. It must not run on the Electron
+  main thread.
+- **IActiveDesktop is fast, but `ApplyChanges` returns `ERROR_TIMEOUT`.** It applies
+  anyway, but it also blocks for about 1–5 s.
+- **IDesktopWallpaper returns immediately.** Without the accent change it reaches the
+  screen in about 465 ms, about 4× slower than SPI.
+- **The official Bing Wallpaper app (1.1.459, .NET 9 + WinUI) doesn't rely on
+  IDesktopWallpaper alone.** Its `BingWallpaper.dll` references `SystemParametersInfoW`
+  with `SPIF_UPDATEINIFILE | SPIF_SENDCHANGE`, `SetWallpaperAndStyleInRegistry`, the
+  undocumented `IVirtualDesktopManagerInternal::UpdateWallpaperPathForAllDesktops` (via
+  the `CLSID_ImmersiveShell` service provider), and `MonitorTranscodedFileChange`.
+  That's from strings only; which path it takes at runtime wasn't traced.

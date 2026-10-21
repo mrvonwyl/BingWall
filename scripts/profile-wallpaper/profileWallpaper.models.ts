@@ -4,7 +4,9 @@ export type InputKind = 'full-jpg' | 'full-bmp' | 'prescaled-jpg' | 'prescaled-b
 
 // 'per-monitor': one SetWallpaper(monitorId, …) per monitor, as the app does today.
 // 'all': a single SetWallpaper(NULL, …) for every monitor.
-export type CallMode = 'per-monitor' | 'all';
+// 'spi': style in the registry, then SystemParametersInfo(SPI_SETDESKWALLPAPER, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE).
+// 'active-desktop': IActiveDesktop SetWallpaper + SetWallpaperOptions + ApplyChanges.
+export type CallMode = 'per-monitor' | 'all' | 'spi' | 'active-desktop';
 
 export type Variant = { input: InputKind; mode: CallMode };
 
@@ -45,12 +47,28 @@ export type Trial = {
   screenSamples: number;
   // Per screen sample: [ms from apply start, cells differing from baseline, cells differing from previous sample].
   timeline: [number, number, number][];
+  // Whether the Windows accent colour changed during the trial (it follows the wallpaper when
+  // AutoColorization is on, and Dynamic Lighting may follow the accent colour).
+  accentChanged: boolean;
+  // The failing call's error, when the apply threw part-way.
+  error: string | null;
+};
+
+// Machine state that can make Explorer do extra work per wallpaper change.
+export type Environment = {
+  label: string;
+  autoColorization: number | null;
+  transparency: number | null;
+  dynamicLighting: number | null;
+  dynamicLightingUsesAccent: number | null;
+  wallpaperListeners: string[];
 };
 
 export type ProfileReport = {
   startedAt: string;
   os: string;
   electron: string;
+  environment: Environment;
   monitors: Monitor[];
   images: ImageSet[];
   settleMs: number;
