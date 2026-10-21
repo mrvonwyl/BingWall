@@ -57,5 +57,8 @@
   "dependencies": {
     "electron-updater": "^6.8.9",
     "koffi": "^3.1.5"
+  },
+  "engines": {
+    "node": "26"
   }
 }
