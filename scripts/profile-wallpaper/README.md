@@ -154,3 +154,17 @@ the three APIs with a full-size JPG. Medians in ms:
   undocumented `IVirtualDesktopManagerInternal::UpdateWallpaperPathForAllDesktops` (via
   the `CLSID_ImmersiveShell` service provider), and `MonitorTranscodedFileChange`.
   That's from strings only; which path it takes at runtime wasn't traced.
+
+### Calling SystemParametersInfo from BingWall
+
+- **koffi can call it.** The `spi` variant above goes through koffi (`legacyWallpaper.ts`).
+  The 1–5 s block is the call itself waiting on the `WM_SETTINGCHANGE` broadcast, not
+  koffi overhead.
+- **Keep it off the Electron main thread.** Use koffi's `fn.async(...args, callback)`,
+  which runs the call on a libuv thread-pool thread, or a `worker_thread`.
+- **The calling thread is still busy for the whole broadcast.** Rapid "latest wins"
+  applies have to be coalesced around that, not issued concurrently.
+- **`SPIF_SENDCHANGE` causes the wait, but it's also what tells other apps the wallpaper
+  changed.** Dropping it trades the block for apps that don't hear about the change.
+- **Not measured yet:** the async form. Expect a main-thread block of about 0 ms and an
+  unchanged ~100 ms to the screen.
