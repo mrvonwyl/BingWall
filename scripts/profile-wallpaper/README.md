@@ -6,7 +6,9 @@ Measures where the time goes when BingWall applies a wallpaper through
 the applier can rerun it and compare against the recorded baseline.
 
 ```powershell
-npm run profile:wallpaper                       # 3 rounds, two newest JPGs from ~/Pictures/BingWallpapers
+npm run build:profile                           # compile to dist-profile/ only
+npm run profile:wallpaper:run                   # run the last build without recompiling
+npm run profile:wallpaper                       # build, then run: 3 rounds, two newest JPGs from ~/Pictures/BingWallpapers
 npm run profile:wallpaper -- --rounds 5 --sources C:\a.jpg,C:\b.jpg --settle 1500 --out C:\somewhere
 npm run profile:wallpaper -- --variants full-jpg/per-monitor,full-jpg/spi --label autocolorization-off
 ```
