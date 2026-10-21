@@ -14,6 +14,7 @@
     "kill:electron": "taskkill /F /IM electron.exe /T",
     "build": "npm run build:ts && electron-builder",
     "test": "vitest run",
+    "profile:wallpaper": "tsc -p tsconfig.profile.json && electron dist-profile/profileWallpaper.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.scripts.json"
   },
   "devDependencies": {

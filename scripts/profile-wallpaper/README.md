@@ -1,0 +1,101 @@
+# Wallpaper apply profiler
+
+Measures where the time goes when BingWall applies a wallpaper through
+`IDesktopWallpaper`, and whether the apply freezes the shell. Built for the
+"Profile where the 2–5 s wallpaper apply time goes" wayfinder task; later work on
+the applier can rerun it and compare against the recorded baseline.
+
+```powershell
+npm run profile:wallpaper                       # 3 rounds, two newest JPGs from ~/Pictures/BingWallpapers
+npm run profile:wallpaper -- --rounds 5 --sources C:\a.jpg,C:\b.jpg --settle 1500 --out C:\somewhere
+```
+
+It changes the real wallpaper many times and puts the original back at the end.
+Before running, quit BingWall (it would apply wallpapers too) and leave most of
+the desktop visible: minimise everything except the terminal.
+Results go to `%TEMP%\bingwall-profile\profile-<timestamp>.{json,md}`.
+
+## Method
+
+The harness runs as an Electron main process, the same thread type that runs
+`main/nativeWallpaper.ts` in the app, and makes the same COM calls in the same order.
+
+- **Per-stage timings.** Each COM call (`CoCreateInstance`, `SetPosition`,
+  `GetMonitorDevicePathCount`/`At`, each `SetWallpaper`, `Release`) is timed on its
+  own with `process.hrtime`.
+- **Main-thread block.** Wall time from the start of the apply until it returns.
+  Every call is synchronous, so this is exactly how long the Electron main thread
+  (IPC, tray, window events) is frozen.
+- **Visible change.** A worker thread `StretchBlt`s the whole composited desktop
+  into a 96×24 grid, about every 25 ms. A screen read waits on the compositor, so it
+  takes one read per sample. Before each apply it samples for 600 ms and drops cells
+  that change on their own (terminal, clock). After that:
+  - *first visible change* is the first sample where at least 2% of cells differ
+    from that baseline;
+  - *settled* is the last sample where at least 2% differ from the sample before it,
+    with no such change for `--settle` ms afterwards.
+
+  Both are measured from the start of the apply.
+- **Shell responsiveness.** A second worker round-trips `WM_NULL` to Explorer's
+  `Progman` window every 10 ms and records the worst latency during each trial. A long
+  round-trip means Explorer's desktop thread is hung, which shows up as a
+  system-wide freeze. A long *worst screen-read gap* in the watcher means DWM
+  composition itself stalled.
+- **CPU.** `GetProcessTimes` (kernel + user) for every `explorer.exe` and `dwm.exe`,
+  from when the trial is armed until the desktop has settled. `dwm.exe` can only be
+  read from an elevated shell; otherwise it shows as `–`.
+
+### Variants
+
+Each round runs every variant once, interleaved, and alternates between two source
+images so every apply visibly changes the desktop:
+
+| Variant | Input | Calls |
+|---|---|---|
+| `full-jpg / per-monitor` | Bing UHD JPG as downloaded (today's behaviour) | one `SetWallpaper(monitorId, …)` per monitor path |
+| `full-jpg / all` | same | a single `SetWallpaper(NULL, …)` |
+| `prescaled-jpg / per-monitor` | JPG cover-scaled and centre-cropped to each monitor's resolution (q90) | one per monitor, each with its own image |
+| `full-bmp / per-monitor` | uncompressed 24-bit BMP at source resolution | one per monitor |
+| `full-bmp / all` | same | single `NULL` call |
+| `prescaled-bmp / per-monitor` | 24-bit BMP at each monitor's resolution | one per monitor |
+
+`GetMonitorDevicePathCount` also counts monitors Windows remembers but that aren't
+attached. Per-monitor mode still calls `SetWallpaper` for them, as the app does.
+For the prescaled variants, a detached monitor gets the first attached monitor's image.
+
+## Baseline (2026-10-21, reference setup)
+
+Full report: [results/2026-10-21-reference-setup.md](results/2026-10-21-reference-setup.md).
+The setup was 3440×1440 + 2560×1440 plus one remembered-but-detached monitor path,
+Windows 11 Home 10.0.26200 and Electron 32.3.3. The run was a warm-up plus 3 rounds,
+with a non-elevated shell, so there is no DWM CPU.
+
+Medians in ms, over 3 trials per variant:
+
+| Variant | COM calls total (main-thread block) | First visible change | Settled | Explorer CPU | Worst Explorer hang |
+|---|---|---|---|---|---|
+| full-jpg / per-monitor (today) | 4.6 | 2143 | 6971 | 3516 | 1224 |
+| full-jpg / all | 2.5 | 1969 | 6839 | 3531 | 872 |
+| prescaled-jpg / per-monitor | 4.7 | 2126 | 6989 | 3656 | 1381 |
+| full-bmp / per-monitor | 5.2 | 2100 | 6898 | 3203 | 1569 |
+| full-bmp / all | 2.4 | 2099 | 6918 | 3375 | 1174 |
+| prescaled-bmp / per-monitor | 4.5 | 2196 | 6902 | 3344 | 1203 |
+
+- **The COM calls cost almost nothing.** `CoCreateInstance` takes ~0.9 ms, even
+  on the first (cold) apply. Each `SetWallpaper` takes ~1 ms. The Electron main
+  thread is blocked for under 6 ms in total. `SetWallpaper` only hands the request to
+  Explorer and returns.
+- **The time is spent inside Explorer after the call returns.** About 2.0–2.2 s pass
+  before any pixel changes. Then a crossfade runs for about 4.8 s, during which
+  cells change on every ~30 ms sample, until the desktop is final at about 6.9 s.
+- **Input format and call shape make no difference.** Full-size JPG, a JPG
+  pre-scaled to monitor resolution and an uncompressed BMP (25 MB) all land within
+  noise of each other. So does one `SetWallpaper(NULL)` against one call per
+  monitor. Decoding and scaling the image are not the bottleneck.
+- **The freeze is Explorer, not DWM and not BingWall.** Explorer uses about 3.2–3.7 s
+  of CPU per apply, and its desktop window thread stops answering for 0.9–1.6 s at a
+  time. Screen reads through the compositor never stall for more than ~90 ms, against
+  ~30 ms normally, so DWM keeps composing throughout.
+- **Caveats.** Only about 220 of the 2304 grid cells showed the change, because most
+  of the desktop was covered by windows. DWM CPU wasn't captured; that needs an
+  elevated shell. The Explorer hang was measured on `Progman`'s thread only.

@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "scripts/profile-wallpaper",
+    "outDir": "dist-profile"
+  },
+  "include": ["scripts/profile-wallpaper/**/*.ts"]
+}
