@@ -120,24 +120,37 @@ function createTray(): void {
   });
 }
 
-function toWallpaperPayload(result: CurrentWallpaperResult) {
+// Versioned by mtime so the renderer doesn't show a cached image after a date's file is replaced.
+async function toImageUrl(imagePath: string): Promise<string> {
+  const url = pathToFileURL(imagePath).toString();
+  try {
+    const { mtimeMs } = await fs.stat(imagePath);
+    return `${url}?v=${Math.round(mtimeMs)}`;
+  } catch {
+    return url;
+  }
+}
+
+async function toWallpaperPayload(result: CurrentWallpaperResult) {
   if (!result) {
     return null;
   }
 
-  return { metadata: result.metadata, imageUrl: pathToFileURL(result.imagePath).toString() };
+  return { metadata: result.metadata, imageUrl: await toImageUrl(result.imagePath) };
 }
 
 type RefreshResult =
-  | { ok: true; current: ReturnType<typeof toWallpaperPayload> }
+  | { ok: true; current: Awaited<ReturnType<typeof toWallpaperPayload>> }
   | { ok: false; error: string };
 
-async function refreshWallpaper(): Promise<void> {
+async function refreshWallpaper(replaceExisting: boolean): Promise<void> {
   const displays = screen.getAllDisplays().map((display) => ({ width: display.size.width, height: display.size.height }));
   const settings = await readSettings(getDataFolder());
 
-  await runDailyUpdate({
+  const result = await runDailyUpdate({
     fetchImpl: fetch,
+    market: settings.market,
+    replaceExisting,
     displays,
     resolutionOverride: settings.resolutionOverride,
     dataFolder: getDataFolder(),
@@ -150,15 +163,23 @@ async function refreshWallpaper(): Promise<void> {
     deleteImage,
     writeState,
   });
+
+  // The selected wallpaper's file was just overwritten, so re-apply it to pick up the new image.
+  if (replaceExisting && !result.wallpaperChanged) {
+    const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
+    if (current) {
+      await setNativeWallpaper(current.imagePath);
+    }
+  }
 }
 
-async function performRefresh(): Promise<RefreshResult> {
+async function performRefresh(replaceExisting = false): Promise<RefreshResult> {
   let result: RefreshResult;
 
   try {
-    await refreshWallpaper();
+    await refreshWallpaper(replaceExisting);
     const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
-    result = { ok: true, current: toWallpaperPayload(current) };
+    result = { ok: true, current: await toWallpaperPayload(current) };
   } catch (error) {
     console.error('BingWall: refresh failed', error);
     result = { ok: false, error: describeRefreshError(error) };
@@ -180,7 +201,7 @@ ipcMain.handle('get-current-wallpaper', async () => {
 ipcMain.handle('get-history', async () => {
   const items = await getHistory({ dataFolder: getDataFolder(), readMetadata });
 
-  return items.map((item) => ({ metadata: item.metadata, imageUrl: pathToFileURL(item.imagePath).toString() }));
+  return Promise.all(items.map(async (item) => ({ metadata: item.metadata, imageUrl: await toImageUrl(item.imagePath) })));
 });
 
 ipcMain.handle('select-wallpaper', async (_event, date: string) => {
@@ -216,7 +237,13 @@ ipcMain.handle('get-settings', async () => {
 });
 
 ipcMain.handle('update-settings', async (_event, settings: Settings) => {
+  const previous = await readSettings(getDataFolder());
   await writeSettings(getDataFolder(), settings);
+
+  if (settings.market !== previous.market) {
+    void performRefresh(true);
+  }
+
   return settings;
 });
 

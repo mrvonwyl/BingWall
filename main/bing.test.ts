@@ -51,7 +51,7 @@ describe('fetchBingImagesWithFallback', () => {
       return { ok: true, status: 200, json: async () => sampleResponse, arrayBuffer: async () => new ArrayBuffer(0) };
     });
 
-    const images = await fetchBingImagesWithFallback(fetchImpl);
+    const images = await fetchBingImagesWithFallback(fetchImpl, 'de-CH');
 
     expect(images).toEqual(sampleResponse.images);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
@@ -65,9 +65,21 @@ describe('fetchBingImagesWithFallback', () => {
       arrayBuffer: async () => new ArrayBuffer(0),
     }));
 
-    const images = await fetchBingImagesWithFallback(fetchImpl);
+    const images = await fetchBingImagesWithFallback(fetchImpl, 'de-CH');
 
     expect(images).toEqual(sampleResponse.images);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches the selected market without a fallback when it has none', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      expect(url).toContain('mkt=en-GB');
+      return { ok: true, status: 200, json: async () => ({ images: [] }), arrayBuffer: async () => new ArrayBuffer(0) };
+    });
+
+    const images = await fetchBingImagesWithFallback(fetchImpl, 'en-GB');
+
+    expect(images).toEqual([]);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

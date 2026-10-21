@@ -379,9 +379,20 @@ function renderDownloadButton(): void {
 async function renderSettings(): Promise<void> {
   const checkbox = byId<HTMLInputElement>("auto-refresh-checkbox");
   const resolutionSelect = byId<HTMLSelectElement>("resolution-select");
+  const marketSelect = byId<HTMLSelectElement>("market-select");
   let settings = await window.bingwall.getSettings();
   checkbox.checked = settings.dailyAutoRefresh;
   resolutionSelect.value = settings.resolutionOverride ?? "";
+  marketSelect.value = settings.market;
+
+  marketSelect.addEventListener("change", () => {
+    void (async () => {
+      settings = await window.bingwall.updateSettings({
+        ...settings,
+        market: marketSelect.value as typeof settings.market,
+      });
+    })();
+  });
 
   checkbox.addEventListener("change", () => {
     void (async () => {

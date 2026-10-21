@@ -49,6 +49,8 @@ function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateD
       json: async () => sampleResponse,
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     })),
+    market: 'de-CH',
+    replaceExisting: false,
     displays: [{ width: 3840, height: 2160 }],
     resolutionOverride: null,
     dataFolder: 'C:\\fake\\Pictures\\BingWallpapers',
@@ -183,5 +185,28 @@ describe('runDailyUpdate', () => {
 
     expect(deps.saveImage).toHaveBeenCalledTimes(1);
     expect(deps.saveImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-16', expect.any(ArrayBuffer));
+  });
+
+  it('re-downloads already stored images when replaceExisting is set', async () => {
+    const deps = buildDeps({
+      fetchImpl: vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => multiDayResponse,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      })),
+      replaceExisting: true,
+      readMetadata: vi.fn(async () => [
+        { date: '2026-08-15', title: 'Old market title', description: 'Old place', copyright: '© Someone', copyrightlink: 'https://www.bing.com/search?q=old' },
+      ]),
+      listImageDates: vi.fn(async () => ['2026-08-15']),
+    });
+
+    await runDailyUpdate(deps);
+
+    expect(deps.saveImage).toHaveBeenCalledTimes(3);
+    const writtenEntries = (deps.writeMetadata as ReturnType<typeof vi.fn>).mock.calls[0][1] as { date: string; title: string }[];
+    expect(writtenEntries.map((entry) => entry.date)).toEqual(['2026-08-16', '2026-08-15', '2026-08-14']);
+    expect(writtenEntries.find((entry) => entry.date === '2026-08-15')?.title).toBe('Middle title');
   });
 });

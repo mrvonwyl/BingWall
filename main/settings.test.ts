@@ -8,7 +8,7 @@ describe('readSettings', () => {
   it('returns the default settings when no settings file exists yet', async () => {
     const result = await readSettings('C:\\fake\\Pictures\\BingWallpapers');
 
-    expect(result).toEqual({ dailyAutoRefresh: true, resolutionOverride: null });
+    expect(result).toEqual({ dailyAutoRefresh: true, resolutionOverride: null, market: 'de-CH' });
   });
 });
 
@@ -24,9 +24,9 @@ describe('writeSettings + readSettings', () => {
   it('round-trips a written settings value', async () => {
     tempFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-settings-'));
 
-    await writeSettings(tempFolder, { dailyAutoRefresh: false, resolutionOverride: '1920x1080' });
+    await writeSettings(tempFolder, { dailyAutoRefresh: false, resolutionOverride: '1920x1080', market: 'en-GB' });
     const result = await readSettings(tempFolder);
 
-    expect(result).toEqual({ dailyAutoRefresh: false, resolutionOverride: '1920x1080' });
+    expect(result).toEqual({ dailyAutoRefresh: false, resolutionOverride: '1920x1080', market: 'en-GB' });
   });
 });

@@ -5,7 +5,7 @@ import { upsertMetadata } from './storage.js';
 import type { RunDailyUpdateDeps, RunDailyUpdateResult } from './pipeline.models.js';
 
 export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDailyUpdateResult> {
-  const images = await fetchBingImagesWithFallback(deps.fetchImpl);
+  const images = await fetchBingImagesWithFallback(deps.fetchImpl, deps.market);
   const newest = images[0];
   const newestMetadata = toStoredMetadata(newest);
 
@@ -18,7 +18,7 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
 
   for (const entry of [...images].reverse()) {
     const metadata = toStoredMetadata(entry);
-    if (existingDates.has(metadata.date)) {
+    if (existingDates.has(metadata.date) && !deps.replaceExisting) {
       continue;
     }
 

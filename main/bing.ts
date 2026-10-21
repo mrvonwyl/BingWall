@@ -4,6 +4,7 @@ import type {
   FetchImpl,
   HPImageArchiveResponse,
   ImageResolution,
+  Market,
   StoredImageMetadata,
 } from './bing.models.js';
 
@@ -29,13 +30,19 @@ export async function fetchBingImages(fetchImpl: FetchImpl, market: string): Pro
   return body.images;
 }
 
-export async function fetchBingImagesWithFallback(fetchImpl: FetchImpl): Promise<BingImageEntry[]> {
-  const primary = await fetchBingImages(fetchImpl, 'de-CH');
-  if (primary.length > 0) {
+// de-CH is not a documented Bing market, so it falls back to de-DE if it ever comes back empty.
+const FALLBACK_MARKETS: Partial<Record<Market, Market>> = {
+  'de-CH': 'de-DE',
+};
+
+export async function fetchBingImagesWithFallback(fetchImpl: FetchImpl, market: Market): Promise<BingImageEntry[]> {
+  const primary = await fetchBingImages(fetchImpl, market);
+  const fallback = FALLBACK_MARKETS[market];
+  if (primary.length > 0 || !fallback) {
     return primary;
   }
 
-  return fetchBingImages(fetchImpl, 'de-DE');
+  return fetchBingImages(fetchImpl, fallback);
 }
 
 export function resolveImageResolution(
