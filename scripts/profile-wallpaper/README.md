@@ -173,24 +173,30 @@ the three APIs with a full-size JPG. Medians in ms:
 
 ## Dynamic Lighting (2026-10-24)
 
-Reports: [Dynamic Lighting on](results/2026-10-24-dynamic-lighting-on.md) and
-[Dynamic Lighting off](results/2026-10-24-dynamic-lighting-off.md). Both runs had
-AutoColorization on and Dynamic Lighting following the accent colour, with SignalRGB and
-Logitech G HUB running and the official Bing Wallpaper app closed. Only the Settings
-toggle "Use Dynamic Lighting on my devices" changed between them. Each is 3 rounds with
-a full-size JPG. Medians in ms:
+Reports: [Dynamic Lighting on](results/2026-10-24-dynamic-lighting-on.md),
+[Dynamic Lighting off](results/2026-10-24-dynamic-lighting-off.md) and
+[manual accent, Dynamic Lighting off](results/2026-10-24-manual-accent.md). The first two
+had AutoColorization on and Dynamic Lighting following the accent colour. Only the
+Settings toggle "Use Dynamic Lighting on my devices" changed between them. The third
+run switched the accent colour to manual (`AutoColorization = 0`) as a same-session
+control. All three had SignalRGB and Logitech G HUB running and the official Bing
+Wallpaper app closed. Each is 3 rounds with a full-size JPG. Medians in ms:
 
-| API | Dynamic Lighting | Main-thread block | First visible change | Settled | Explorer CPU | Worst Explorer hang | Accent changed |
-|---|---|---|---|---|---|---|---|
-| IDesktopWallpaper per monitor | on | 4.0 | 2110 | 5962 | 1438 | 922 | 3/3 |
-| IDesktopWallpaper per monitor | **off** | 3.8 | 2273 | 8406 | 3391 | 1080 | 3/3 |
-| SystemParametersInfo | on | 4466 | 270 | 5171 | 2391 | 1132 | 3/3 |
-| SystemParametersInfo | **off** | 4188 | 1735 | 1735 | 2000 | 911 | 3/3 |
+| API | Accent | Dynamic Lighting | Main-thread block | First visible change | Settled | Explorer CPU | Worst Explorer hang | Accent changed |
+|---|---|---|---|---|---|---|---|---|
+| IDesktopWallpaper per monitor | automatic | on | 4.0 | 2110 | 5962 | 1438 | 922 | 3/3 |
+| IDesktopWallpaper per monitor | automatic | **off** | 3.8 | 2273 | 8406 | 3391 | 1080 | 3/3 |
+| IDesktopWallpaper per monitor | **manual** | off | 3.6 | **468** | **468** | 266 | **59** | 0/3 |
+| SystemParametersInfo | automatic | on | 4466 | 270 | 5171 | 2391 | 1132 | 3/3 |
+| SystemParametersInfo | automatic | **off** | 4188 | 1735 | 1735 | 2000 | 911 | 3/3 |
+| SystemParametersInfo | **manual** | off | 1755 | **104** | **109** | 125 | **56** | 0/3 |
 
 - **Dynamic Lighting adds nothing measurable.** With it off, Explorer still hangs for
   0.9–1.1 s per apply, the SPI call still blocks for 2.5–5.6 s, and Explorer CPU is no
   lower. The accent-colour cost is Explorer's own work, not the lighting devices following it.
 - **The runs are noisy.** Three trials per cell, with first-visible-change spreads of
   140–2258 ms for SPI. The off run being slower in places is noise, not an effect.
-  Neither run comes close to the AutoColorization-off numbers (~100 ms visible,
-  ~50 ms worst hang).
+- **A manual accent colour removes the cost, and the 2026-10-21 result reproduces.**
+  SPI reaches the screen in ~100 ms and IDesktopWallpaper in ~470 ms, both settled with
+  no trailing fade. Explorer hangs for ~55 ms at most and the spread across trials is tight.
+  The SPI call still blocks its thread for ~1.6–1.8 s on the `WM_SETTINGCHANGE` broadcast.
