@@ -79,6 +79,15 @@ Every ticket is either **HITL** (human in the loop, worked _with_ a human who sp
 - **Grilling** (HITL): Conversation. The default case. Always call the Skill tool twice, for "grilling" and "domain-modeling".
 - **Task** (HITL or AFK): Manual work that must happen before a _decision_ can be made: nothing to decide, prototype, or research, but the discussion is blocked until it's done. Signing up for a service so its API can be judged, provisioning access, moving data so its shape can be seen. This is the one type that _does_ rather than decides, and it earns its place by unblocking a decision, not by delivering the destination. The agent drives it alone where it can (AFK); otherwise it hands the human a precise checklist (HITL). Resolved when the work is done; the answer records what was done and any resulting facts (credentials location, new URLs, row counts) later tickets depend on.
 
+## Asking the human
+
+Whenever wayfinder puts a decision to the human (naming the destination, mapping the frontier, any HITL ticket), ask **one question at a time** with the **AskUserQuestion** tool. This overrides the round format in the `grilling` skill: keep its design tree and its rule that facts are yours to find, but don't post numbered rounds as text.
+
+- One question per call. Wait for the answer, recompute the frontier, then ask the next question.
+- Offer 2–4 concrete, mutually exclusive answers as options. Put your recommendation first and add "(Recommended)" to its label. Use `description` for trade-offs, and `preview` when the choices are code, protocol messages or layouts to compare. Don't add an "Other" option, because the tool always provides one.
+- Before the first question of a session, give a short text note with the context the questions rely on (current behaviour, relevant decisions so far), so each question can stay short.
+- A free-text "Other" answer is a real answer: take it as given, or ask a follow-up question if it opens a new branch.
+
 ## Fog of war
 
 The map is _deliberately_ incomplete: don't chart what you can't yet see. Beyond the live tickets lies the **fog of war**: the dim view of decisions and investigations you can tell are coming but can't yet pin down, because they hang on questions still open. Resolving a ticket clears the fog ahead of it, graduating whatever's now specifiable into fresh tickets, one at a time, until the way to the destination is clear and no tickets remain.
