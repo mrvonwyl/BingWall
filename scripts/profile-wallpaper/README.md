@@ -170,3 +170,27 @@ the three APIs with a full-size JPG. Medians in ms:
   changed.** Dropping it trades the block for apps that don't hear about the change.
 - **Not measured yet:** the async form. Expect a main-thread block of about 0 ms and an
   unchanged ~100 ms to the screen.
+
+## Dynamic Lighting (2026-10-24)
+
+Reports: [Dynamic Lighting on](results/2026-10-24-dynamic-lighting-on.md) and
+[Dynamic Lighting off](results/2026-10-24-dynamic-lighting-off.md). Both runs had
+AutoColorization on and Dynamic Lighting following the accent colour, with SignalRGB and
+Logitech G HUB running and the official Bing Wallpaper app closed. Only the Settings
+toggle "Use Dynamic Lighting on my devices" changed between them. Each is 3 rounds with
+a full-size JPG. Medians in ms:
+
+| API | Dynamic Lighting | Main-thread block | First visible change | Settled | Explorer CPU | Worst Explorer hang | Accent changed |
+|---|---|---|---|---|---|---|---|
+| IDesktopWallpaper per monitor | on | 4.0 | 2110 | 5962 | 1438 | 922 | 3/3 |
+| IDesktopWallpaper per monitor | **off** | 3.8 | 2273 | 8406 | 3391 | 1080 | 3/3 |
+| SystemParametersInfo | on | 4466 | 270 | 5171 | 2391 | 1132 | 3/3 |
+| SystemParametersInfo | **off** | 4188 | 1735 | 1735 | 2000 | 911 | 3/3 |
+
+- **Dynamic Lighting adds nothing measurable.** With it off, Explorer still hangs for
+  0.9–1.1 s per apply, the SPI call still blocks for 2.5–5.6 s, and Explorer CPU is no
+  lower. The accent-colour cost is Explorer's own work, not the lighting devices following it.
+- **The runs are noisy.** Three trials per cell, with first-visible-change spreads of
+  140–2258 ms for SPI. The off run being slower in places is noise, not an effect.
+  Neither run comes close to the AutoColorization-off numbers (~100 ms visible,
+  ~50 ms worst hang).
