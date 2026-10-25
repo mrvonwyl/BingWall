@@ -164,7 +164,7 @@ describe('runDailyUpdate', () => {
 
     await runDailyUpdate(deps);
 
-    expect(deps.fetchImpl).toHaveBeenCalledWith(expect.stringContaining('_UHD.jpg'));
+    expect(deps.fetchImpl).toHaveBeenCalledWith(expect.stringContaining('_UHD.jpg'), expect.anything());
   });
 
   it('requests the overridden resolution instead of UHD', async () => {
@@ -172,7 +172,7 @@ describe('runDailyUpdate', () => {
 
     await runDailyUpdate(deps);
 
-    expect(deps.fetchImpl).toHaveBeenCalledWith(expect.stringContaining('_1280x720.jpg'));
+    expect(deps.fetchImpl).toHaveBeenCalledWith(expect.stringContaining('_1280x720.jpg'), expect.anything());
   });
 
   it('fetches and stores the image but leaves the wallpaper alone when daily auto-refresh is off', async () => {
@@ -350,6 +350,69 @@ describe('runDailyUpdate', () => {
     const writtenEntries = (deps.writeMetadata as ReturnType<typeof vi.fn>).mock.calls[0][1] as { date: string }[];
     expect(writtenEntries.map((entry) => entry.date)).toEqual(['2026-08-16', '2026-08-14']);
     expect(deps.deleteImage).not.toHaveBeenCalled();
+  });
+
+  describe('abort', () => {
+    it('writes no files, metadata or state and applies nothing once aborted mid-download', async () => {
+      const gated = gatedFetch(multiDayResponse);
+      const controller = new AbortController();
+      const deps = buildDeps({ fetchImpl: gated.fetchImpl, listImageDates: vi.fn(async () => []), signal: controller.signal });
+
+      const run = runDailyUpdate(deps);
+      await vi.waitFor(() => expect(gated.imageRequests()).toBe(3));
+      controller.abort();
+      gated.gateFor('Newest').resolve(new Uint8Array([1]).buffer);
+      gated.gateFor('Middle').resolve(new Uint8Array([2]).buffer);
+      gated.gateFor('Oldest').resolve(new Uint8Array([3]).buffer);
+
+      await expect(run).rejects.toThrow();
+      expect(deps.saveImage).not.toHaveBeenCalled();
+      expect(deps.setWallpaper).not.toHaveBeenCalled();
+      expect(deps.writeState).not.toHaveBeenCalled();
+      expect(deps.writeMetadata).not.toHaveBeenCalled();
+      expect(deps.deleteImage).not.toHaveBeenCalled();
+    });
+
+    it('settles without waiting for downloads that ignore the abort', async () => {
+      const gated = gatedFetch(multiDayResponse);
+      const controller = new AbortController();
+      const deps = buildDeps({ fetchImpl: gated.fetchImpl, listImageDates: vi.fn(async () => []), signal: controller.signal });
+
+      const run = runDailyUpdate(deps);
+      await vi.waitFor(() => expect(gated.imageRequests()).toBe(3));
+      controller.abort();
+
+      await expect(run).rejects.toThrow();
+    });
+
+    it('saves no more images and no metadata when aborted after the target was applied', async () => {
+      const gated = gatedFetch(multiDayResponse);
+      const controller = new AbortController();
+      const deps = buildDeps({ fetchImpl: gated.fetchImpl, listImageDates: vi.fn(async () => []), signal: controller.signal });
+
+      const run = runDailyUpdate(deps);
+      gated.gateFor('Newest').resolve(new Uint8Array([1]).buffer);
+      await vi.waitFor(() => expect(deps.setWallpaper).toHaveBeenCalledTimes(1));
+      controller.abort();
+      gated.gateFor('Middle').resolve(new Uint8Array([2]).buffer);
+      gated.gateFor('Oldest').resolve(new Uint8Array([3]).buffer);
+
+      await expect(run).rejects.toThrow();
+      expect(deps.saveImage).toHaveBeenCalledTimes(1);
+      expect(deps.writeMetadata).not.toHaveBeenCalled();
+      expect(deps.deleteImage).not.toHaveBeenCalled();
+    });
+
+    it('passes the abort signal on to every request', async () => {
+      const controller = new AbortController();
+      const deps = buildDeps({ signal: controller.signal });
+
+      await runDailyUpdate(deps);
+
+      for (const call of (deps.fetchImpl as ReturnType<typeof vi.fn>).mock.calls) {
+        expect(call[1]).toEqual({ signal: controller.signal });
+      }
+    });
   });
 
   describe('market switch (replaceExisting)', () => {

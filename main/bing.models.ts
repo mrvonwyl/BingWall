@@ -10,7 +10,7 @@ export type HPImageArchiveResponse = {
   images: BingImageEntry[];
 };
 
-export type FetchImpl = (url: string) => Promise<{
+export type FetchImpl = (url: string, init?: { signal?: AbortSignal }) => Promise<{
   ok: boolean;
   status: number;
   json: () => Promise<unknown>;

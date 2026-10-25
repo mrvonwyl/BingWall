@@ -21,6 +21,8 @@ export type RunDailyUpdateDeps = {
   deleteImage: (folder: string, date: string) => Promise<void>;
   readState: (folder: string) => Promise<WallpaperState | null>;
   writeState: (folder: string, state: WallpaperState) => Promise<void>;
+  // Aborted when a newer refresh replaces this one.
+  signal?: AbortSignal;
 };
 
 export type RunDailyUpdateResult = {
