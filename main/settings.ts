@@ -1,6 +1,34 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { DEFAULT_SETTINGS, type Settings } from './settings.models.js';
+import { DEFAULT_SETTINGS, type Settings, type SettingsUpdate, type SettingsUpdater } from './settings.models.js';
+
+// Settings are changed from more than one place (the settings pane, an explicit selection turning daily
+// auto-refresh off). Each read-modify-write runs only after the previous one finished, so none undoes another.
+let settingsQueue: Promise<unknown> = Promise.resolve();
+
+function enqueue<T>(task: () => Promise<T>): Promise<T> {
+  const run = settingsQueue.then(task);
+  settingsQueue = run.catch(() => undefined);
+  return run;
+}
+
+// Resolves with the settings before and after the update, or null when the updater left them as they are.
+export function updateSettings(folder: string, update: SettingsUpdater): Promise<SettingsUpdate | null> {
+  return enqueue(async () => {
+    const previous = await readSettings(folder);
+    const next = update(previous);
+    if (!next) {
+      return null;
+    }
+    await writeSettings(folder, next);
+    return { previous, next };
+  });
+}
+
+// The settings once every update queued before this read has been written.
+export function readSettingsInOrder(folder: string): Promise<Settings> {
+  return enqueue(() => readSettings(folder));
+}
 
 export async function readSettings(folder: string): Promise<Settings> {
   try {

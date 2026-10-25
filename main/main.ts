@@ -18,7 +18,7 @@ import type { RunDailyUpdateResult } from './pipeline.models.js';
 import { describePartialDownloadFailure, describeRefreshError } from './refreshError.js';
 import { createRefreshRunner } from './refreshRunner.js';
 import type { RefreshRun } from './refreshRunner.models.js';
-import { readSettings, writeSettings } from './settings.js';
+import { readSettings, readSettingsInOrder, updateSettings } from './settings.js';
 import type { Settings } from './settings.models.js';
 import { selectWallpaper } from './selectWallpaper.js';
 import { readState, writeState } from './state.js';
@@ -235,8 +235,8 @@ ipcMain.handle('select-wallpaper', async (_event, date: string) => {
     readMetadata,
     setWallpaper,
     writeState,
-    readSettings,
-    writeSettings,
+    updateSettings,
+    logError: (message, error) => console.error(message, error),
   });
 
   switch (result?.status) {
@@ -269,18 +269,19 @@ ipcMain.handle('download-wallpaper', async (_event, date: string) => {
 });
 
 ipcMain.handle('get-settings', async () => {
-  return readSettings(getDataFolder());
+  return readSettingsInOrder(getDataFolder());
 });
 
-ipcMain.handle('update-settings', async (_event, settings: Settings) => {
-  const previous = await readSettings(getDataFolder());
-  await writeSettings(getDataFolder(), settings);
+// Takes only the changed fields, so a stale renderer copy can't undo a change made elsewhere meanwhile.
+ipcMain.handle('update-settings', async (_event, change: Partial<Settings>) => {
+  const update = await updateSettings(getDataFolder(), (current) => ({ ...current, ...change }));
+  const { previous, next } = update!;
 
-  if (settings.market !== previous.market) {
+  if (next.market !== previous.market) {
     void performRefresh(true);
   }
 
-  return settings;
+  return next;
 });
 
 ipcMain.handle('refresh-wallpaper', async () => {

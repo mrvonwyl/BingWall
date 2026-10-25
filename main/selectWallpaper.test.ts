@@ -13,14 +13,24 @@ const AUTO_REFRESH_OFF: Settings = { dailyAutoRefresh: false, resolutionOverride
 const AUTO_REFRESH_ON: Settings = { ...AUTO_REFRESH_OFF, dailyAutoRefresh: true };
 
 function buildDeps(outcome: ApplyOutcome, dates = ['2026-08-16', '2026-08-15'], settings = AUTO_REFRESH_OFF) {
-  return {
+  // Records each settings value an update wrote; an update that returns null writes nothing.
+  const writeSettings = vi.fn((_settings: Settings) => undefined);
+  const deps = {
     dataFolder: 'C:\\fake\\Pictures\\BingWallpapers',
     readMetadata: vi.fn(async () => dates.map(entry)),
     setWallpaper: vi.fn(async (): Promise<ApplyOutcome> => outcome),
     writeState: vi.fn(async () => undefined),
-    readSettings: vi.fn(async () => settings),
-    writeSettings: vi.fn(async () => undefined),
+    updateSettings: vi.fn(async (_folder: string, update: (current: Settings) => Settings | null) => {
+      const next = update(settings);
+      if (!next) {
+        return null;
+      }
+      writeSettings(next);
+      return { previous: settings, next };
+    }),
+    logError: vi.fn(),
   } satisfies SelectWallpaperDeps;
+  return { ...deps, writeSettings };
 }
 
 describe('selectWallpaper', () => {
@@ -74,7 +84,7 @@ describe('selectWallpaper', () => {
       const result = await selectWallpaper('2026-08-15', deps);
 
       expect(deps.writeSettings).toHaveBeenCalledTimes(1);
-      expect(deps.writeSettings).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers', AUTO_REFRESH_OFF);
+      expect(deps.writeSettings).toHaveBeenCalledWith(AUTO_REFRESH_OFF);
       expect(result).toMatchObject({ status: 'applied', updatedSettings: AUTO_REFRESH_OFF });
     });
 
@@ -83,7 +93,7 @@ describe('selectWallpaper', () => {
 
       const result = await selectWallpaper('2026-08-14', deps);
 
-      expect(deps.writeSettings).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers', AUTO_REFRESH_OFF);
+      expect(deps.writeSettings).toHaveBeenCalledWith(AUTO_REFRESH_OFF);
       expect(result).toMatchObject({ status: 'applied', updatedSettings: AUTO_REFRESH_OFF });
     });
 
@@ -131,6 +141,23 @@ describe('selectWallpaper', () => {
       await selectWallpaper('2026-08-15', deps);
 
       expect(deps.writeState.mock.invocationCallOrder[0]).toBeLessThan(deps.writeSettings.mock.invocationCallOrder[0]);
+    });
+
+    it('still reports the apply as applied, and logs, when the settings update fails', async () => {
+      const deps = buildDeps({ kind: 'applied' }, ['2026-08-16', '2026-08-15'], AUTO_REFRESH_ON);
+      const failure = new Error('EBUSY: settings.json is locked');
+      deps.updateSettings.mockRejectedValueOnce(failure);
+
+      const result = await selectWallpaper('2026-08-15', deps);
+
+      expect(deps.writeState).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers', { selectedDate: '2026-08-15' });
+      expect(result).toEqual({
+        status: 'applied',
+        metadata: entry('2026-08-15'),
+        imagePath: 'C:\\fake\\Pictures\\BingWallpapers\\2026-08-15.jpg',
+        updatedSettings: null,
+      });
+      expect(deps.logError).toHaveBeenCalledWith(expect.any(String), failure);
     });
   });
 });
