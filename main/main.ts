@@ -10,6 +10,7 @@ import { getCurrentWallpaper } from './currentWallpaper.js';
 import { watchForDevReload } from './devReload.js';
 import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
 import { downloadWallpaper } from './download.js';
+import { shouldOpenExternally } from './externalLinks.js';
 import { getHistory } from './history.js';
 import { setNativeWallpaper } from './nativeWallpaper.js';
 import { runDailyUpdate } from './pipeline.js';
@@ -57,7 +58,11 @@ function createWindow(show: boolean): void {
   mainWindow.setAspectRatio(16 / 9);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (shouldOpenExternally(url)) {
+      void shell.openExternal(url);
+    } else {
+      console.warn(`Refused to open external link: ${url}`);
+    }
     return { action: 'deny' };
   });
 
