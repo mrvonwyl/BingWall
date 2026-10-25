@@ -328,6 +328,34 @@ describe('runDailyUpdate', () => {
     expect(deps.writeState).not.toHaveBeenCalled();
   });
 
+  it('leaves no download failure unhandled while it is still choosing the target', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const gated = gatedFetch(multiDayResponse);
+      const deps = buildDeps({
+        fetchImpl: gated.fetchImpl,
+        replaceExisting: true,
+        dailyAutoRefresh: false,
+        readState: vi.fn(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          throw new Error('state unreadable');
+        }),
+      });
+      gated.gateFor('Newest').resolve(new Uint8Array([1]).buffer);
+      gated.gateFor('Middle').reject(new Error('connection reset'));
+      gated.gateFor('Oldest').resolve(new Uint8Array([3]).buffer);
+
+      await expect(runDailyUpdate(deps)).rejects.toThrow('state unreadable');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
   it('never prunes the image currently applied, even when its date drops out of history', async () => {
     const gated = gatedFetch(multiDayResponse);
     const deps = buildDeps({

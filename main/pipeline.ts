@@ -36,13 +36,23 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
     return { metadata, downloaded: true, landed };
   });
 
-  const target = await pickTarget(jobs, deps);
+  // Handles every download's outcome from the start, so none counts as unhandled while the target is chosen.
+  const landing = Promise.allSettled(jobs.map((job) => job.landed));
+
+  let target: ImageJob | undefined;
+  try {
+    target = await pickTarget(jobs, deps);
+  } catch (error) {
+    // No file write may still be under way once the run settles.
+    await landing;
+    throw error;
+  }
   // The apply goes out as soon as the target is on disk, while the other downloads carry on.
   const applying = target ? applyWhenLanded(target, deps) : Promise.resolve(null);
   // Awaited below; this only stops an early state-write failure from counting as unhandled meanwhile.
   applying.catch(() => undefined);
 
-  const settled = await Promise.allSettled(jobs.map((job) => job.landed));
+  const settled = await landing;
   // Not cut short by an abort: an apply already sent must finish, and record its state if applied, before
   // this run settles, so nothing is written once the next refresh has started.
   const applied = await applying;
