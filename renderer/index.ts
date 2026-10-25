@@ -333,8 +333,12 @@ async function handleRefreshResult(
     return;
   }
 
-  clearError();
-  showSuccess("Wallpaper updated.");
+  if (result.warning) {
+    showError(result.warning);
+  } else {
+    clearError();
+    showSuccess("Wallpaper updated.");
+  }
 
   renderEmptyState(!result.current);
   await loadHistory(result.current?.metadata.date);

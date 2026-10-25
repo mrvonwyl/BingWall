@@ -22,6 +22,11 @@ function describeApplyError(outcome: ApplierError, fallback: string): string {
   }
 }
 
+// The banner text for a refresh that applied its target but lost some other images on the way.
+export function describePartialDownloadFailure(failedDates: string[]): string {
+  return `Some images failed to download, so these days are missing from history: ${failedDates.join(', ')}.`;
+}
+
 export function describeRefreshError(error: unknown): string {
   if (error instanceof ApplyFailedError) {
     return describeApplyError(error.outcome, error.message);
