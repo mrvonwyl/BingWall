@@ -231,6 +231,7 @@ async function applySelection(): Promise<void> {
     return;
   }
 
+  clearError();
   renderEmptyState(false);
 }
 
