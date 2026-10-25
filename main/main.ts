@@ -161,7 +161,8 @@ type RefreshResult =
 async function refreshWallpaper(replaceExisting: boolean): Promise<void> {
   const settings = await readSettings(getDataFolder());
 
-  const result = await runDailyUpdate({
+  // A market switch re-applies the selected wallpaper from its new file inside the pipeline.
+  await runDailyUpdate({
     fetchImpl: fetch,
     market: settings.market,
     replaceExisting,
@@ -174,19 +175,9 @@ async function refreshWallpaper(replaceExisting: boolean): Promise<void> {
     setWallpaper,
     listImageDates,
     deleteImage,
+    readState,
     writeState,
   });
-
-  // The selected wallpaper's file was just overwritten, so re-apply it to pick up the new image.
-  if (replaceExisting && !result.wallpaperChanged) {
-    const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
-    if (current) {
-      const outcome = await setWallpaper(current.imagePath);
-      if (outcome.kind === 'error') {
-        throw new ApplyFailedError(outcome);
-      }
-    }
-  }
 }
 
 async function performRefresh(replaceExisting = false): Promise<RefreshResult> {

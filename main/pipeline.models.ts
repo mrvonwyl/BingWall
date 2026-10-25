@@ -5,7 +5,8 @@ import type { WallpaperState } from './state.models.js';
 export type RunDailyUpdateDeps = {
   fetchImpl: FetchImpl;
   market: Market;
-  // Re-download dates that are already stored, e.g. after switching market.
+  // Re-download dates that are already stored, e.g. after switching market. The selected wallpaper is
+  // then re-applied from its new file even with daily auto-refresh off.
   replaceExisting: boolean;
   // Null means UHD.
   resolutionOverride: ImageResolution | null;
@@ -18,6 +19,7 @@ export type RunDailyUpdateDeps = {
   setWallpaper: (imagePath: string) => Promise<ApplyOutcome>;
   listImageDates: (folder: string) => Promise<string[]>;
   deleteImage: (folder: string, date: string) => Promise<void>;
+  readState: (folder: string) => Promise<WallpaperState | null>;
   writeState: (folder: string, state: WallpaperState) => Promise<void>;
 };
 

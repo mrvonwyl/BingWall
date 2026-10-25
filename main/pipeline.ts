@@ -34,7 +34,7 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
     return { metadata, downloaded: true, landed };
   });
 
-  const target = deps.dailyAutoRefresh ? jobs[0] : undefined;
+  const target = await pickTarget(jobs, deps);
   // The apply goes out as soon as the target is on disk, while the other downloads carry on.
   const applying = target ? applyWhenLanded(target, deps) : Promise.resolve(null);
   // Awaited below; this only stops an early state-write failure from counting as unhandled meanwhile.
@@ -71,7 +71,21 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
   return { imagePath: newestImagePath, metadata: newestMetadata, wallpaperChanged: applied?.outcome.kind === 'applied' };
 }
 
-// Never rejects: a failed target download is reported through the job's own `landed` promise.
+// With daily auto-refresh on, the newest image. With it off, nothing changes unless the stored files are
+// being replaced (a market switch): then the selected date's new image, or the newest if that date isn't
+// among the new market's images.
+async function pickTarget(jobs: ImageJob[], deps: RunDailyUpdateDeps): Promise<ImageJob | undefined> {
+  if (deps.dailyAutoRefresh) {
+    return jobs[0];
+  }
+  if (!deps.replaceExisting) {
+    return undefined;
+  }
+  const state = await deps.readState(deps.dataFolder);
+  return jobs.find((job) => job.metadata.date === state?.selectedDate) ?? jobs[0];
+}
+
+// Never rejects for a download failure: that is reported through the job's own `landed` promise.
 async function applyWhenLanded(target: ImageJob, deps: RunDailyUpdateDeps): Promise<{ outcome: ApplyOutcome } | null> {
   let imagePath: string;
   try {

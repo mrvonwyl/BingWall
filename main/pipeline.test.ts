@@ -96,6 +96,7 @@ function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateD
     setWallpaper: vi.fn(async (): Promise<ApplyOutcome> => ({ kind: 'applied' })),
     listImageDates: vi.fn(async () => ['2026-08-16']),
     deleteImage: vi.fn(async () => undefined),
+    readState: vi.fn(async () => null),
     writeState: vi.fn(async () => undefined),
     ...overrides,
   };
@@ -274,6 +275,55 @@ describe('runDailyUpdate', () => {
     expect(deps.setWallpaper).toHaveBeenCalledTimes(1);
     const writtenEntries = (deps.writeMetadata as ReturnType<typeof vi.fn>).mock.calls[0][1] as { date: string }[];
     expect(writtenEntries.map((entry) => entry.date)).toEqual(['2026-08-16', '2026-08-15', '2026-08-14']);
+  });
+
+  describe('market switch (replaceExisting)', () => {
+    function switchDeps(overrides: Partial<RunDailyUpdateDeps>) {
+      return buildDeps({
+        fetchImpl: vi.fn(async () => ({
+          ok: true,
+          status: 200,
+          json: async () => multiDayResponse,
+          arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+        })),
+        replaceExisting: true,
+        readMetadata: vi.fn(async () => [
+          { date: '2026-08-15', title: 'Old market title', description: 'Old place', copyright: '© Someone', copyrightlink: 'https://www.bing.com/search?q=old' },
+        ]),
+        listImageDates: vi.fn(async () => ['2026-08-15']),
+        ...overrides,
+      });
+    }
+
+    it('re-applies the selected date\'s new image when daily auto-refresh is off', async () => {
+      const deps = switchDeps({ dailyAutoRefresh: false, readState: vi.fn(async () => ({ selectedDate: '2026-08-15' })) });
+
+      const result = await runDailyUpdate(deps);
+
+      expect(deps.setWallpaper).toHaveBeenCalledTimes(1);
+      expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-15.jpg');
+      expect(deps.writeState).toHaveBeenCalledWith(deps.dataFolder, { selectedDate: '2026-08-15' });
+      expect(result.wallpaperChanged).toBe(true);
+    });
+
+    it('applies the newest image when auto-refresh is off and the selected date is not in the new market', async () => {
+      const deps = switchDeps({ dailyAutoRefresh: false, readState: vi.fn(async () => ({ selectedDate: '2026-08-01' })) });
+
+      await runDailyUpdate(deps);
+
+      expect(deps.setWallpaper).toHaveBeenCalledTimes(1);
+      expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
+      expect(deps.writeState).toHaveBeenCalledWith(deps.dataFolder, { selectedDate: '2026-08-16' });
+    });
+
+    it('applies the newest image when daily auto-refresh is on, whatever date is selected', async () => {
+      const deps = switchDeps({ dailyAutoRefresh: true, readState: vi.fn(async () => ({ selectedDate: '2026-08-15' })) });
+
+      await runDailyUpdate(deps);
+
+      expect(deps.setWallpaper).toHaveBeenCalledTimes(1);
+      expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
+    });
   });
 
   it('re-downloads already stored images when replaceExisting is set', async () => {
