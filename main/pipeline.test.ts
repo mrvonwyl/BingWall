@@ -356,7 +356,7 @@ describe('runDailyUpdate', () => {
     }
   });
 
-  it('never prunes the image currently applied, even when its date drops out of history', async () => {
+  it('never prunes the image currently applied, and keeps its entry when its re-download fails', async () => {
     const gated = gatedFetch(multiDayResponse);
     const deps = buildDeps({
       fetchImpl: gated.fetchImpl,
@@ -375,8 +375,9 @@ describe('runDailyUpdate', () => {
     await expect(runDailyUpdate(deps)).rejects.toThrow('connection reset');
 
     expect(deps.setWallpaper).not.toHaveBeenCalled();
-    const writtenEntries = (deps.writeMetadata as ReturnType<typeof vi.fn>).mock.calls[0][1] as { date: string }[];
-    expect(writtenEntries.map((entry) => entry.date)).toEqual(['2026-08-16', '2026-08-14']);
+    const writtenEntries = (deps.writeMetadata as ReturnType<typeof vi.fn>).mock.calls[0][1] as { date: string; title: string }[];
+    expect(writtenEntries.map((entry) => entry.date)).toEqual(['2026-08-16', '2026-08-15', '2026-08-14']);
+    expect(writtenEntries.find((entry) => entry.date === '2026-08-15')?.title).toBe('Old market title');
     expect(deps.deleteImage).not.toHaveBeenCalled();
   });
 
@@ -521,6 +522,253 @@ describe('runDailyUpdate', () => {
 
       expect(deps.setWallpaper).toHaveBeenCalledTimes(1);
       expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
+    });
+  });
+
+  describe('keeping the selected wallpaper in history', () => {
+    const storedEntry = (date: string) => ({
+      date,
+      title: `Title ${date}`,
+      description: `Place ${date}`,
+      copyright: '© Someone',
+      copyrightlink: `https://www.bing.com/search?q=${date}`,
+    });
+
+    // Bing's answer for a single day, as an `HPImageArchive` response.
+    const dayResponse = (date: string): HPImageArchiveResponse => ({
+      images: [
+        {
+          startdate: date.replaceAll('-', ''),
+          urlbase: `/th?id=OHR.Day${date.replaceAll('-', '')}_EN-US1234567890`,
+          copyright: `Place ${date} (© Someone)`,
+          copyrightlink: `https://www.bing.com/search?q=${date}`,
+          title: `Title ${date}`,
+        },
+      ],
+    });
+
+    const fetchFor = (response: HPImageArchiveResponse) =>
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => response,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+      }));
+
+    const eightStored = () =>
+      ['2026-08-15', '2026-08-14', '2026-08-13', '2026-08-12', '2026-08-11', '2026-08-10', '2026-08-09', '2026-08-08'].map(
+        storedEntry,
+      );
+
+    // An in-memory data folder: metadata, image files and state persist across runs.
+    function memoryStore(entries: ReturnType<typeof storedEntry>[], selectedDate: string | null) {
+      const store = {
+        metadata: entries,
+        files: new Set(entries.map((entry) => entry.date)),
+        state: selectedDate ? { selectedDate } : null,
+      };
+      const deps: Partial<RunDailyUpdateDeps> = {
+        readMetadata: vi.fn(async () => store.metadata),
+        writeMetadata: vi.fn(async (_folder: string, written: ReturnType<typeof storedEntry>[]) => {
+          store.metadata = written;
+        }),
+        saveImage: vi.fn(async (folder: string, date: string) => {
+          store.files.add(date);
+          return `${folder}\\${date}.jpg`;
+        }),
+        listImageDates: vi.fn(async () => [...store.files]),
+        deleteImage: vi.fn(async (_folder: string, date: string) => {
+          store.files.delete(date);
+        }),
+        readState: vi.fn(async () => store.state),
+        writeState: vi.fn(async (_folder: string, state: { selectedDate: string }) => {
+          store.state = state;
+        }),
+      };
+      return { store, deps };
+    }
+
+    const writtenDates = (deps: RunDailyUpdateDeps) =>
+      ((deps.writeMetadata as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1] as { date: string }[]).map(
+        (entry) => entry.date,
+      );
+
+    it('keeps the selected oldest entry on top of the newest 8 when auto-refresh is off', async () => {
+      const memory = memoryStore(eightStored(), '2026-08-08');
+      const deps = buildDeps({ ...memory.deps, dailyAutoRefresh: false, fetchImpl: fetchFor(dayResponse('2026-08-16')) });
+
+      const result = await runDailyUpdate(deps);
+
+      expect(writtenDates(deps)).toEqual([
+        '2026-08-16', '2026-08-15', '2026-08-14', '2026-08-13', '2026-08-12', '2026-08-11', '2026-08-10', '2026-08-09',
+        '2026-08-08',
+      ]);
+      expect(memory.store.metadata.at(-1)).toEqual(storedEntry('2026-08-08'));
+      expect(deps.deleteImage).not.toHaveBeenCalledWith(deps.dataFolder, '2026-08-08');
+      expect(deps.setWallpaper).not.toHaveBeenCalled();
+      expect(result.wallpaperChanged).toBe(false);
+    });
+
+    it('keeps the selected entry over several back-to-back refreshes, at 9 entries', async () => {
+      const memory = memoryStore(eightStored(), '2026-08-08');
+
+      for (const date of ['2026-08-16', '2026-08-17', '2026-08-18']) {
+        await runDailyUpdate(buildDeps({ ...memory.deps, dailyAutoRefresh: false, fetchImpl: fetchFor(dayResponse(date)) }));
+      }
+
+      expect(memory.store.metadata.map((entry) => entry.date)).toEqual([
+        '2026-08-18', '2026-08-17', '2026-08-16', '2026-08-15', '2026-08-14', '2026-08-13', '2026-08-12', '2026-08-11',
+        '2026-08-08',
+      ]);
+      expect(memory.store.files.has('2026-08-08')).toBe(true);
+      expect(memory.deps.deleteImage).toHaveBeenCalledWith(expect.any(String), '2026-08-10');
+    });
+
+    it('keeps history at 8 when the selected date is among the newest 8', async () => {
+      const memory = memoryStore(eightStored(), '2026-08-12');
+      const deps = buildDeps({ ...memory.deps, dailyAutoRefresh: false, fetchImpl: fetchFor(dayResponse('2026-08-16')) });
+
+      await runDailyUpdate(deps);
+
+      expect(writtenDates(deps)).toEqual([
+        '2026-08-16', '2026-08-15', '2026-08-14', '2026-08-13', '2026-08-12', '2026-08-11', '2026-08-10', '2026-08-09',
+      ]);
+      expect(deps.deleteImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-08');
+    });
+
+    it('trims the old pick once daily auto-refresh applies the new image', async () => {
+      const memory = memoryStore(eightStored(), '2026-08-08');
+      const deps = buildDeps({ ...memory.deps, dailyAutoRefresh: true, fetchImpl: fetchFor(dayResponse('2026-08-16')) });
+
+      const result = await runDailyUpdate(deps);
+
+      expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
+      expect(memory.store.state).toEqual({ selectedDate: '2026-08-16' });
+      expect(writtenDates(deps)).toHaveLength(8);
+      expect(writtenDates(deps)).not.toContain('2026-08-08');
+      expect(deps.deleteImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-08');
+      expect(result.wallpaperChanged).toBe(true);
+    });
+
+    it('trims the old entry normally once another date is selected', async () => {
+      const memory = memoryStore(eightStored(), '2026-08-08');
+      await runDailyUpdate(buildDeps({ ...memory.deps, dailyAutoRefresh: false, fetchImpl: fetchFor(dayResponse('2026-08-16')) }));
+      memory.store.state = { selectedDate: '2026-08-14' };
+
+      const deps = buildDeps({ ...memory.deps, dailyAutoRefresh: false, fetchImpl: fetchFor(dayResponse('2026-08-17')) });
+      await runDailyUpdate(deps);
+
+      expect(writtenDates(deps)).toEqual([
+        '2026-08-17', '2026-08-16', '2026-08-15', '2026-08-14', '2026-08-13', '2026-08-12', '2026-08-11', '2026-08-10',
+      ]);
+      expect(deps.deleteImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-09');
+      expect(deps.deleteImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-08');
+    });
+
+    it('re-applies on a market switch as before and keeps whatever ends up selected', async () => {
+      const memory = memoryStore(eightStored(), '2026-08-08');
+      const deps = buildDeps({
+        ...memory.deps,
+        dailyAutoRefresh: false,
+        replaceExisting: true,
+        fetchImpl: fetchFor(multiDayResponse),
+      });
+
+      await runDailyUpdate(deps);
+
+      expect(deps.setWallpaper).toHaveBeenCalledTimes(1);
+      expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
+      expect(memory.store.state).toEqual({ selectedDate: '2026-08-16' });
+      expect(writtenDates(deps)).toHaveLength(8);
+      expect(writtenDates(deps)[0]).toBe('2026-08-16');
+      expect(deps.deleteImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-08');
+    });
+
+    it('keeps the old selection on a market switch whose apply was superseded', async () => {
+      const memory = memoryStore(eightStored(), '2026-08-08');
+      const deps = buildDeps({
+        ...memory.deps,
+        dailyAutoRefresh: false,
+        replaceExisting: true,
+        fetchImpl: fetchFor(multiDayResponse),
+        setWallpaper: vi.fn(async (): Promise<ApplyOutcome> => ({ kind: 'superseded' })),
+      });
+
+      await runDailyUpdate(deps);
+
+      expect(memory.store.state).toEqual({ selectedDate: '2026-08-08' });
+      expect(writtenDates(deps)).toHaveLength(9);
+      expect(writtenDates(deps).at(-1)).toBe('2026-08-08');
+      expect(deps.deleteImage).not.toHaveBeenCalledWith(deps.dataFolder, '2026-08-08');
+    });
+
+    it('keeps an entry selected while the trimmed metadata was being written', async () => {
+      const memory = memoryStore(eightStored(), '2026-08-12');
+      const write = memory.deps.writeMetadata!;
+      const writeMetadata = vi.fn(async (folder: string, written: ReturnType<typeof storedEntry>[]) => {
+        // An explicit selection of the oldest entry lands while the first write is under way.
+        if (writeMetadata.mock.calls.length === 1) {
+          memory.store.state = { selectedDate: '2026-08-08' };
+        }
+        await write(folder, written);
+      });
+      const deps = buildDeps({
+        ...memory.deps,
+        writeMetadata,
+        dailyAutoRefresh: false,
+        fetchImpl: fetchFor(dayResponse('2026-08-16')),
+      });
+
+      await runDailyUpdate(deps);
+
+      expect(memory.store.metadata.map((entry) => entry.date)).toEqual([
+        '2026-08-16', '2026-08-15', '2026-08-14', '2026-08-13', '2026-08-12', '2026-08-11', '2026-08-10', '2026-08-09',
+        '2026-08-08',
+      ]);
+      expect(memory.store.files.has('2026-08-08')).toBe(true);
+      expect(deps.deleteImage).not.toHaveBeenCalled();
+    });
+
+    it('trims to 8 when there is no saved state', async () => {
+      const memory = memoryStore(eightStored(), null);
+      const deps = buildDeps({ ...memory.deps, dailyAutoRefresh: false, fetchImpl: fetchFor(dayResponse('2026-08-16')) });
+
+      await runDailyUpdate(deps);
+
+      expect(writtenDates(deps)).toHaveLength(8);
+      expect(writtenDates(deps)).not.toContain('2026-08-08');
+      expect(deps.deleteImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-08');
+    });
+
+    it('keeps the selected entry when another download in the run fails', async () => {
+      const gated = gatedFetch(multiDayResponse);
+      const memory = memoryStore(eightStored().slice(2).concat(storedEntry('2026-08-01')), '2026-08-01');
+      const deps = buildDeps({ ...memory.deps, dailyAutoRefresh: false, fetchImpl: gated.fetchImpl });
+      gated.gateFor('Newest').resolve(new Uint8Array([1]).buffer);
+      gated.gateFor('Middle').reject(new Error('connection reset'));
+      gated.gateFor('Oldest').resolve(new Uint8Array([3]).buffer);
+
+      const result = await runDailyUpdate(deps);
+
+      expect(result.failedDates).toEqual(['2026-08-15']);
+      expect(writtenDates(deps)).toContain('2026-08-01');
+      expect(deps.deleteImage).not.toHaveBeenCalledWith(deps.dataFolder, '2026-08-01');
+    });
+
+    it('keeps the selected entry whose own re-download failed when its image is already on disk', async () => {
+      const gated = gatedFetch(multiDayResponse);
+      const memory = memoryStore(eightStored(), '2026-08-15');
+      const deps = buildDeps({ ...memory.deps, dailyAutoRefresh: false, replaceExisting: true, fetchImpl: gated.fetchImpl });
+      gated.gateFor('Newest').resolve(new Uint8Array([1]).buffer);
+      gated.gateFor('Middle').reject(new Error('connection reset'));
+      gated.gateFor('Oldest').resolve(new Uint8Array([3]).buffer);
+
+      await expect(runDailyUpdate(deps)).rejects.toThrow('connection reset');
+
+      expect(deps.setWallpaper).not.toHaveBeenCalled();
+      expect(writtenDates(deps)).toContain('2026-08-15');
+      expect(memory.store.metadata.find((entry) => entry.date === '2026-08-15')).toEqual(storedEntry('2026-08-15'));
+      expect(deps.deleteImage).not.toHaveBeenCalledWith(deps.dataFolder, '2026-08-15');
     });
   });
 

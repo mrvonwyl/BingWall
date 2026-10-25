@@ -35,8 +35,9 @@ export type RefreshResultPayload =
 
 // Reply to select-wallpaper (null when the date isn't in history). A superseded request was replaced
 // by a newer one and changes nothing; an error leaves the previous wallpaper and selection in place.
+// `updatedSettings` is set when applying an older image turned daily auto-refresh off.
 export type SelectWallpaperReply =
-  | { status: 'applied'; current: CurrentWallpaperPayload }
+  | { status: 'applied'; current: CurrentWallpaperPayload; updatedSettings: Settings | null }
   | { status: 'superseded' }
   | { status: 'error'; error: string; message: string }
   | null;
@@ -46,7 +47,8 @@ export type BingWallAPI = {
   getHistory: () => Promise<HistoryItemPayload[]>;
   selectWallpaper: (date: string) => Promise<SelectWallpaperReply>;
   getSettings: () => Promise<Settings>;
-  updateSettings: (settings: Settings) => Promise<Settings>;
+  // Takes only the changed fields and resolves with the settings as saved.
+  updateSettings: (change: Partial<Settings>) => Promise<Settings>;
   refresh: () => Promise<RefreshResultPayload>;
   onRefreshResult: (callback: (result: RefreshResultPayload) => void) => void;
   getDataFolder: () => Promise<string>;

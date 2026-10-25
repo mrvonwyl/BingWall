@@ -6,6 +6,15 @@ export type Settings = {
   market: Market;
 };
 
+// The settings as they were before an update and as it wrote them.
+export type SettingsUpdate = {
+  previous: Settings;
+  next: Settings;
+};
+
+// Returns the settings to write, or null to leave them as they are.
+export type SettingsUpdater = (current: Settings) => Settings | null;
+
 export const DEFAULT_SETTINGS: Settings = {
   dailyAutoRefresh: true,
   resolutionOverride: null,

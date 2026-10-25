@@ -17,9 +17,9 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
   const newestMetadata = toStoredMetadata(images[0]);
   const resolution = deps.resolutionOverride ?? 'UHD';
 
-  let retained = await deps.readMetadata(deps.dataFolder);
+  const stored = await deps.readMetadata(deps.dataFolder);
   signal?.throwIfAborted();
-  const existingDates = new Set(retained.map((entry) => entry.date));
+  const existingDates = new Set(stored.map((entry) => entry.date));
 
   // Every download starts at once; each image lands on disk independently.
   const jobs: ImageJob[] = images.map((entry) => {
@@ -65,22 +65,27 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
       failedDates.add(job.metadata.date);
     }
   });
-  retained = retained.filter((entry) => !failedDates.has(entry.date));
+  // Every download has landed, so this listing holds for the rest of the run.
+  const imageDates = await deps.listImageDates(deps.dataFolder);
+  const retain = (selectedDate: string | undefined) => retainedMetadata(stored, jobs, failedDates, imageDates, selectedDate);
 
-  // Oldest first, so the newest ends up at the front of the history.
-  for (const job of [...jobs].reverse()) {
-    if (job.downloaded && !failedDates.has(job.metadata.date)) {
-      retained = upsertMetadata(retained, job.metadata);
-    }
+  // Read once this run's apply has settled, so a wallpaper it just applied counts as the selected one.
+  let selectedDate = (await deps.readState(deps.dataFolder))?.selectedDate;
+  let retained = retain(selectedDate);
+  await deps.writeMetadata(deps.dataFolder, retained);
+  // An explicit selection can land while the metadata is written; its entry and image must stay too.
+  const latestSelectedDate = (await deps.readState(deps.dataFolder))?.selectedDate;
+  if (latestSelectedDate !== selectedDate) {
+    selectedDate = latestSelectedDate;
+    retained = retain(selectedDate);
+    await deps.writeMetadata(deps.dataFolder, retained);
   }
 
-  await deps.writeMetadata(deps.dataFolder, retained);
-  const appliedDate = (await deps.readState(deps.dataFolder))?.selectedDate;
   await pruneOrphanedImages({
     dataFolder: deps.dataFolder,
     entries: retained,
-    keepDates: appliedDate ? [appliedDate] : [],
-    listImageDates: deps.listImageDates,
+    keepDates: selectedDate ? [selectedDate] : [],
+    listImageDates: async () => imageDates,
     deleteImage: deps.deleteImage,
   });
 
@@ -115,6 +120,30 @@ async function pickTarget(jobs: ImageJob[], deps: RunDailyUpdateDeps): Promise<I
   }
   const state = await deps.readState(deps.dataFolder);
   return jobs.find((job) => job.metadata.date === state?.selectedDate) ?? jobs[0];
+}
+
+// The stored history with this run's downloads upserted, capped at the retention limit. A failed date drops
+// out of history. The selected wallpaper is the exception to both: it stays beyond the cap, in its date-ordered
+// place, so history and the current-wallpaper lookup keep showing what is on the desktop, and it survives its
+// own failed download while its image is still on disk.
+function retainedMetadata(
+  stored: StoredImageMetadata[],
+  jobs: ImageJob[],
+  failedDates: Set<string>,
+  imageDates: string[],
+  selectedDate: string | undefined,
+): StoredImageMetadata[] {
+  let retained = stored.filter(
+    (entry) => !failedDates.has(entry.date) || (entry.date === selectedDate && imageDates.includes(entry.date)),
+  );
+  // Oldest first, so the newest ends up at the front of the history.
+  for (const job of [...jobs].reverse()) {
+    if (job.downloaded && !failedDates.has(job.metadata.date)) {
+      retained = upsertMetadata(retained, job.metadata, selectedDate);
+    }
+  }
+  // A kept entry whose re-download failed was passed by the upserts of newer and older dates alike.
+  return retained.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 // Settles like `promise`, or rejects with the signal's reason as soon as it aborts, whichever comes first.
