@@ -461,6 +461,33 @@ svg {
   color: var(--text-muted);
 }
 
+#known-limitations-heading {
+  margin: 0;
+}
+
+#known-limitations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+#known-limitations-list li {
+  margin-top: 0;
+  display: list-item;
+}
+
+#known-limitations-list a {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+#known-limitations-list a:hover {
+  border-bottom-color: var(--text);
+}
+
 .switch-row {
   display: flex;
   align-items: center;
