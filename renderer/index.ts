@@ -10,9 +10,7 @@ import type {
 let historyItems: HistoryItemPayload[] = [];
 let selectedIndex = -1;
 let applyRequestId = 0;
-// The renderer's copy of the saved settings. Every settings change sends the whole object back,
-// so it must follow changes made in the main process too.
-let settings: Settings | undefined;
+let settingsRequestId = 0;
 
 function byId<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -222,7 +220,7 @@ async function applySelection(): Promise<void> {
   const reply = await window.bingwall.selectWallpaper(item.metadata.date);
   // Even a stale reply's settings change is already saved, so the settings pane shows it regardless.
   if (reply?.status === "applied" && reply.updatedSettings) {
-    showSettings(reply.updatedSettings);
+    void syncSettings();
   }
   // Stale replies and superseded requests change nothing: a newer request owns the outcome.
   if (!reply || requestId !== applyRequestId || reply.status === "superseded") {
@@ -399,7 +397,6 @@ function renderDownloadButton(): void {
 }
 
 function showSettings(next: Settings): void {
-  settings = next;
   byId<HTMLInputElement>("auto-refresh-checkbox").checked =
     next.dailyAutoRefresh;
   byId<HTMLSelectElement>("resolution-select").value =
@@ -407,17 +404,30 @@ function showSettings(next: Settings): void {
   byId<HTMLSelectElement>("market-select").value = next.market;
 }
 
+// Settings change from here and from main (a selection turning auto-refresh off), and their replies
+// can arrive out of order. Main answers this read only after every change queued before it, so the
+// newest read is the saved settings; an older one that arrives late is ignored.
+async function syncSettings(): Promise<void> {
+  const requestId = ++settingsRequestId;
+  const latest = await window.bingwall.getSettings();
+  if (requestId === settingsRequestId) {
+    showSettings(latest);
+  }
+}
+
 async function renderSettings(): Promise<void> {
   const checkbox = byId<HTMLInputElement>("auto-refresh-checkbox");
   const resolutionSelect = byId<HTMLSelectElement>("resolution-select");
   const marketSelect = byId<HTMLSelectElement>("market-select");
-  showSettings(await window.bingwall.getSettings());
+  await syncSettings();
 
+  // Sends only the changed field, so it can't undo a change made elsewhere meanwhile.
   const update = async (change: Partial<Settings>): Promise<void> => {
-    if (!settings) {
-      return;
+    try {
+      await window.bingwall.updateSettings(change);
+    } finally {
+      await syncSettings();
     }
-    settings = await window.bingwall.updateSettings({ ...settings, ...change });
   };
 
   marketSelect.addEventListener("change", () => {

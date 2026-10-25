@@ -702,6 +702,33 @@ describe('runDailyUpdate', () => {
       expect(deps.deleteImage).not.toHaveBeenCalledWith(deps.dataFolder, '2026-08-08');
     });
 
+    it('keeps an entry selected while the trimmed metadata was being written', async () => {
+      const memory = memoryStore(eightStored(), '2026-08-12');
+      const write = memory.deps.writeMetadata!;
+      const writeMetadata = vi.fn(async (folder: string, written: ReturnType<typeof storedEntry>[]) => {
+        // An explicit selection of the oldest entry lands while the first write is under way.
+        if (writeMetadata.mock.calls.length === 1) {
+          memory.store.state = { selectedDate: '2026-08-08' };
+        }
+        await write(folder, written);
+      });
+      const deps = buildDeps({
+        ...memory.deps,
+        writeMetadata,
+        dailyAutoRefresh: false,
+        fetchImpl: fetchFor(dayResponse('2026-08-16')),
+      });
+
+      await runDailyUpdate(deps);
+
+      expect(memory.store.metadata.map((entry) => entry.date)).toEqual([
+        '2026-08-16', '2026-08-15', '2026-08-14', '2026-08-13', '2026-08-12', '2026-08-11', '2026-08-10', '2026-08-09',
+        '2026-08-08',
+      ]);
+      expect(memory.store.files.has('2026-08-08')).toBe(true);
+      expect(deps.deleteImage).not.toHaveBeenCalled();
+    });
+
     it('trims to 8 when there is no saved state', async () => {
       const memory = memoryStore(eightStored(), null);
       const deps = buildDeps({ ...memory.deps, dailyAutoRefresh: false, fetchImpl: fetchFor(dayResponse('2026-08-16')) });

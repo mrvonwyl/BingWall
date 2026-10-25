@@ -38,9 +38,15 @@ export async function relocateDataFolder(oldFolder: string, newFolder: string): 
   await fs.rmdir(oldFolder);
 }
 
-export function upsertMetadata(existing: StoredImageMetadata[], entry: StoredImageMetadata): StoredImageMetadata[] {
+// Caps the list at the newest MAX_RETAINED_ENTRIES. `keepDate`'s entry (the selected wallpaper) is exempt
+// from the cap and keeps its date-ordered place.
+export function upsertMetadata(
+  existing: StoredImageMetadata[],
+  entry: StoredImageMetadata,
+  keepDate?: string,
+): StoredImageMetadata[] {
   const withoutDuplicate = existing.filter((e) => e.date !== entry.date);
-  return [entry, ...withoutDuplicate].slice(0, MAX_RETAINED_ENTRIES);
+  return [entry, ...withoutDuplicate].filter((e, index) => index < MAX_RETAINED_ENTRIES || e.date === keepDate);
 }
 
 export async function readMetadata(folder: string): Promise<StoredImageMetadata[]> {

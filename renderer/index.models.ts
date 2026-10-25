@@ -47,7 +47,8 @@ export type BingWallAPI = {
   getHistory: () => Promise<HistoryItemPayload[]>;
   selectWallpaper: (date: string) => Promise<SelectWallpaperReply>;
   getSettings: () => Promise<Settings>;
-  updateSettings: (settings: Settings) => Promise<Settings>;
+  // Takes only the changed fields and resolves with the settings as saved.
+  updateSettings: (change: Partial<Settings>) => Promise<Settings>;
   refresh: () => Promise<RefreshResultPayload>;
   onRefreshResult: (callback: (result: RefreshResultPayload) => void) => void;
   getDataFolder: () => Promise<string>;

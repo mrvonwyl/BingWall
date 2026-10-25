@@ -31,14 +31,16 @@ function newestDate(entries: StoredImageMetadata[]): string {
 }
 
 // Picking an image other than today's means the user wants it to stay, so the next daily image
-// mustn't override it. Returns the written settings, or null when auto-refresh was already off.
+// mustn't override it. Returns the written settings, or null when auto-refresh was already off. The wallpaper
+// is applied either way, so a failed settings update is only logged.
 async function turnOffDailyAutoRefresh(deps: SelectWallpaperDeps): Promise<Settings | null> {
-  const settings = await deps.readSettings(deps.dataFolder);
-  if (!settings.dailyAutoRefresh) {
+  try {
+    const update = await deps.updateSettings(deps.dataFolder, (current) =>
+      current.dailyAutoRefresh ? { ...current, dailyAutoRefresh: false } : null,
+    );
+    return update?.next ?? null;
+  } catch (error) {
+    deps.logError('BingWall: could not turn daily auto-refresh off after a selection', error);
     return null;
   }
-
-  const updated = { ...settings, dailyAutoRefresh: false };
-  await deps.writeSettings(deps.dataFolder, updated);
-  return updated;
 }
