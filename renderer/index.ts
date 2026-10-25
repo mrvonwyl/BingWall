@@ -328,6 +328,11 @@ function showSuccess(message: string): void {
 async function handleRefreshResult(
   result: RefreshResultPayload,
 ): Promise<void> {
+  // A newer refresh owns the outcome: no message, no banner change.
+  if ("superseded" in result) {
+    return;
+  }
+
   if (!result.ok) {
     showError(result.error);
     return;

@@ -5,17 +5,11 @@ import { pruneOrphanedImages } from './history.js';
 import { upsertMetadata } from './storage.js';
 import type { StoredImageMetadata } from './bing.models.js';
 import type { ApplyOutcome } from './applier/applier.models.js';
-import type { RunDailyUpdateDeps, RunDailyUpdateResult } from './pipeline.models.js';
+import type { ImageJob, RunDailyUpdateDeps, RunDailyUpdateResult } from './pipeline.models.js';
 
-type ImageJob = {
-  metadata: StoredImageMetadata;
-  downloaded: boolean;
-  // Resolves with the image's path once it is on disk.
-  landed: Promise<string>;
-};
-
-// Once `deps.signal` aborts, the refresh writes no more files, metadata or state, makes no apply, and
-// rejects with the signal's reason as soon as no file write is under way.
+// Once `deps.signal` aborts, the refresh writes no more files or metadata, makes no new apply, and rejects
+// with the signal's reason as soon as no file write is under way and an apply already sent (with its state
+// write) has settled.
 export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDailyUpdateResult> {
   const { signal } = deps;
   const images = await fetchBingImagesWithFallback(deps.fetchImpl, deps.market, signal);
@@ -42,15 +36,27 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
     return { metadata, downloaded: true, landed };
   });
 
-  const target = await pickTarget(jobs, deps);
+  // Handles every download's outcome from the start, so none counts as unhandled while the target is chosen.
+  const landing = Promise.allSettled(jobs.map((job) => job.landed));
+
+  let target: ImageJob | undefined;
+  try {
+    target = await pickTarget(jobs, deps);
+  } catch (error) {
+    // No file write may still be under way once the run settles.
+    await landing;
+    throw error;
+  }
   // The apply goes out as soon as the target is on disk, while the other downloads carry on.
   const applying = target ? applyWhenLanded(target, deps) : Promise.resolve(null);
   // Awaited below; this only stops an early state-write failure from counting as unhandled meanwhile.
   applying.catch(() => undefined);
 
-  const settled = await Promise.allSettled(jobs.map((job) => job.landed));
+  const settled = await landing;
+  // Not cut short by an abort: an apply already sent must finish, and record its state if applied, before
+  // this run settles, so nothing is written once the next refresh has started.
+  const applied = await applying;
   signal?.throwIfAborted();
-  const applied = await untilAborted(applying, signal);
 
   // A failed date drops out of history, so its image is pruned like any other orphan.
   const failedDates = new Set<string>();

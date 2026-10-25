@@ -7,6 +7,7 @@ import type { ApplierCore, ApplierCoreDeps } from './applierCore.models.js';
 export function createApplierCore(deps: ApplierCoreDeps): ApplierCore {
   let inFlight = false;
   let pending: ApplyRequest | null = null;
+  const logError = deps.logError ?? ((message: string, error: unknown) => console.error(message, error));
 
   async function applyWithBackend(path: string): Promise<BackendApplyResult> {
     try {
@@ -19,13 +20,18 @@ export function createApplierCore(deps: ApplierCoreDeps): ApplierCore {
   async function run(request: ApplyRequest): Promise<void> {
     inFlight = true;
     const result = await applyWithBackend(request.path);
-    deps.postMessage({ id: request.id, ...result });
-    inFlight = false;
-
-    const next = pending;
-    pending = null;
-    if (next) {
-      void run(next);
+    try {
+      deps.postMessage({ id: request.id, ...result });
+    } catch (error) {
+      logError('BingWall applier: failed to post a reply', error);
+    } finally {
+      // Released whatever happens to the reply, so the pending request still runs.
+      inFlight = false;
+      const next = pending;
+      pending = null;
+      if (next) {
+        void run(next);
+      }
     }
   }
 

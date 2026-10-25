@@ -195,6 +195,60 @@ describe('createRefreshRunner', () => {
     expect(state).toEqual({ selectedDate: '2026-08-16' });
   });
 
+  it('starts the next refresh only after an aborted refresh has recorded the apply it already sent', async () => {
+    const response: HPImageArchiveResponse = {
+      images: [
+        { startdate: '20260816', urlbase: '/th?id=OHR.Only_EN-US1', copyright: 'x', copyrightlink: 'x', title: 'x' },
+      ],
+    };
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => response,
+      arrayBuffer: async () => new ArrayBuffer(1),
+    }));
+    const firstApply = deferred<ApplyOutcome>();
+    const events: string[] = [];
+    let runs = 0;
+
+    const runner = createRefreshRunner({
+      run: ({ replaceExisting, signal }) => {
+        const runNumber = ++runs;
+        events.push(`run ${runNumber} started`);
+        return runDailyUpdate({
+          fetchImpl,
+          market: 'en-US',
+          replaceExisting,
+          resolutionOverride: null,
+          dataFolder: 'data',
+          dailyAutoRefresh: true,
+          signal,
+          readMetadata: async () => [],
+          writeMetadata: async () => undefined,
+          saveImage: async (_folder, date) => `data/${date}.jpg`,
+          setWallpaper: async () => (runNumber === 1 ? firstApply.promise : { kind: 'applied' }),
+          listImageDates: async () => [],
+          deleteImage: async () => undefined,
+          readState: async () => null,
+          writeState: async () => {
+            events.push(`run ${runNumber} wrote state`);
+          },
+        });
+      },
+    });
+
+    const first = runner.refresh(false);
+    await vi.waitFor(() => expect(events).toContain('run 1 started'));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const second = runner.refresh(false);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    firstApply.resolve({ kind: 'applied' });
+
+    await expect(first).resolves.toEqual({ status: 'aborted' });
+    await expect(second).resolves.toMatchObject({ status: 'done' });
+    expect(events).toEqual(['run 1 started', 'run 1 wrote state', 'run 2 started', 'run 2 wrote state']);
+  });
+
   it('passes on a failure of a refresh that was not aborted', async () => {
     const runner = createRefreshRunner({ run: async () => Promise.reject(new Error('HTTP 500')) });
 

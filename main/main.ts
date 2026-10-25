@@ -157,9 +157,11 @@ async function toWallpaperPayload(result: CurrentWallpaperResult) {
   return { metadata: result.metadata, imageUrl: await toImageUrl(result.imagePath) };
 }
 
+// Mirrors RefreshResultPayload in preload.models.cts and renderer/index.models.ts.
 type RefreshResult =
   | { ok: true; current: Awaited<ReturnType<typeof toWallpaperPayload>>; warning?: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string }
+  | { superseded: true };
 
 async function refreshWallpaper({ replaceExisting, signal }: RefreshRun): Promise<RunDailyUpdateResult> {
   const settings = await readSettings(getDataFolder());
@@ -193,9 +195,8 @@ async function performRefresh(replaceExisting = false): Promise<RefreshResult> {
   try {
     const outcome = await refreshRunner.refresh(replaceExisting);
     if (outcome.status === 'aborted') {
-      // The newer refresh pushes its own result; this one just reports what is current.
-      const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
-      return { ok: true, current: await toWallpaperPayload(current) };
+      // A newer refresh replaced this one and pushes its own result; this one reports nothing.
+      return { superseded: true };
     }
     const { failedDates } = outcome.value;
     const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });

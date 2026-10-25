@@ -14,3 +14,11 @@ export type RefreshRunOutcome<T> = { status: 'done'; value: T } | { status: 'abo
 export type RefreshRunner<T> = {
   refresh: (replaceExisting: boolean) => Promise<RefreshRunOutcome<T>>;
 };
+
+// The refresh currently running (or waiting for its predecessor to settle).
+export type InFlight = {
+  controller: AbortController;
+  replaceExisting: boolean;
+  // Resolves once the run has settled either way, so no file write is under way any more.
+  settled: Promise<void>;
+};

@@ -59,13 +59,19 @@ export const win32Native: Win32Native = {
     return SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, imagePath, SPIF_UPDATEINIFILE) !== 0;
   },
 
+  // Reliable as a separate call: koffi (since 2.6.10) saves the thread's last-error value after every
+  // foreign call and restores it before the next one, so Node/V8 work in between can't clobber it.
+  // Must still be the very next koffi call after the failed one.
   getLastError() {
     return GetLastError() as number;
   },
 
   // Not SPIF_SENDCHANGE / SendMessageTimeout: those wait on every top-level window
   // (1-5 s when the accent colour follows the wallpaper). SendNotifyMessageW returns at once.
+  // Broadcast caveat (spec #41): MSDN says async sends can't carry a pointer for a message below
+  // WM_USER and may fail with ERROR_MESSAGE_SYNC_ONLY. Whether receivers get the string is a manual
+  // acceptance check (#52); if it fails, this switches to SendMessageTimeoutW + SMTO_ABORTIFHUNG.
   notifyWallpaperChanged() {
-    SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, SPI_SETDESKWALLPAPER, DESKTOP_SUBKEY);
+    return SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, SPI_SETDESKWALLPAPER, DESKTOP_SUBKEY) !== 0;
   },
 };

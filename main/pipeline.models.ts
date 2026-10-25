@@ -32,3 +32,11 @@ export type RunDailyUpdateResult = {
   // Dates whose download failed while the refresh as a whole went ahead; they are not in history.
   failedDates: string[];
 };
+
+// One image of a refresh: either already stored, or being downloaded.
+export type ImageJob = {
+  metadata: StoredImageMetadata;
+  downloaded: boolean;
+  // Resolves with the image's path once it is on disk.
+  landed: Promise<string>;
+};

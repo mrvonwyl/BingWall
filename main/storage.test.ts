@@ -101,6 +101,58 @@ describe('saveImage', () => {
     expect(await fs.readdir(tempFolder)).toEqual(['2026-08-16.jpg']);
     expect([...(await fs.readFile(imagePath))]).toEqual([9, 9, 9, 9]);
   });
+
+  function lockedError(code: string): NodeJS.ErrnoException {
+    return Object.assign(new Error(`${code}: operation not permitted, rename`), { code });
+  }
+
+  it('retries the rename while the existing file is briefly held open', async () => {
+    tempFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-save-'));
+    const imagePath = path.join(tempFolder, '2026-08-16.jpg');
+    await fs.writeFile(imagePath, Buffer.from([9, 9, 9, 9]));
+    const realRename = fs.rename.bind(fs);
+    const codes = ['EPERM', 'EBUSY', 'EACCES'];
+    const rename = vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      const code = codes.shift();
+      if (code) {
+        throw lockedError(code);
+      }
+      return realRename(from, to);
+    });
+
+    await saveImage(tempFolder, '2026-08-16', new Uint8Array([1, 2, 3]).buffer);
+
+    expect(rename).toHaveBeenCalledTimes(4);
+    vi.restoreAllMocks();
+    expect([...(await fs.readFile(imagePath))]).toEqual([1, 2, 3]);
+    expect(await fs.readdir(tempFolder)).toEqual(['2026-08-16.jpg']);
+  });
+
+  it('gives up after a few attempts, removes the temp file and keeps the previous file', async () => {
+    tempFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-save-'));
+    const imagePath = path.join(tempFolder, '2026-08-16.jpg');
+    await fs.writeFile(imagePath, Buffer.from([9, 9, 9, 9]));
+    const rename = vi.spyOn(fs, 'rename').mockRejectedValue(lockedError('EBUSY'));
+
+    await expect(saveImage(tempFolder, '2026-08-16', new Uint8Array([1, 2, 3]).buffer)).rejects.toThrow('EBUSY');
+
+    expect(rename.mock.calls.length).toBeGreaterThan(1);
+    expect(rename.mock.calls.length).toBeLessThanOrEqual(5);
+    vi.restoreAllMocks();
+    expect(await fs.readdir(tempFolder)).toEqual(['2026-08-16.jpg']);
+    expect([...(await fs.readFile(imagePath))]).toEqual([9, 9, 9, 9]);
+  });
+
+  it('does not retry a rename that fails for another reason', async () => {
+    tempFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-save-'));
+    const rename = vi.spyOn(fs, 'rename').mockRejectedValue(lockedError('ENOSPC'));
+
+    await expect(saveImage(tempFolder, '2026-08-16', new Uint8Array([1, 2, 3]).buffer)).rejects.toThrow('ENOSPC');
+
+    expect(rename).toHaveBeenCalledTimes(1);
+    vi.restoreAllMocks();
+    expect(await fs.readdir(tempFolder)).toEqual([]);
+  });
 });
 
 describe('relocateDataFolder', () => {  let oldFolder: string;
