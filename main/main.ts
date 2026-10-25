@@ -4,7 +4,7 @@ const { autoUpdater } = electronUpdater;
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createApplierHost, toSetWallpaper } from './applier/applierHost.js';
+import { ApplyFailedError, createApplierHost } from './applier/applierHost.js';
 import { checkForUpdates } from './autoUpdate.js';
 import { readBootstrapPointer, writeBootstrapPointer } from './bootstrap.js';
 import { getCurrentWallpaper } from './currentWallpaper.js';
@@ -31,7 +31,8 @@ const applierHost = createApplierHost({
     utilityProcess.fork(path.join(__dirname, 'applier', 'applierChild.js'), [], { serviceName: 'BingWall wallpaper applier' }),
   logError: (message, details) => console.error(message, details ?? ''),
 });
-const setWallpaper = toSetWallpaper(applierHost);
+// History selection and every refresh share this one host, ordered by arrival in main.
+const setWallpaper = (imagePath: string) => applierHost.apply(imagePath);
 
 const BACKGROUND_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -182,7 +183,10 @@ async function refreshWallpaper(replaceExisting: boolean): Promise<void> {
   if (replaceExisting && !result.wallpaperChanged) {
     const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
     if (current) {
-      await setWallpaper(current.imagePath);
+      const outcome = await setWallpaper(current.imagePath);
+      if (outcome.kind === 'error') {
+        throw new ApplyFailedError(outcome);
+      }
     }
   }
 }
@@ -226,7 +230,16 @@ ipcMain.handle('select-wallpaper', async (_event, date: string) => {
     writeState,
   });
 
-  return toWallpaperPayload(result);
+  switch (result?.status) {
+    case undefined:
+      return null;
+    case 'applied':
+      return { status: 'applied', current: await toWallpaperPayload(result) };
+    case 'superseded':
+      return { status: 'superseded' };
+    case 'error':
+      return { status: 'error', error: result.error.error, message: describeRefreshError(new ApplyFailedError(result.error)) };
+  }
 });
 
 ipcMain.handle('download-wallpaper', async (_event, date: string) => {
