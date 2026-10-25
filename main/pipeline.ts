@@ -65,27 +65,27 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
       failedDates.add(job.metadata.date);
     }
   });
-  let retained = stored.filter((entry) => !failedDates.has(entry.date));
-
-  // Oldest first, so the newest ends up at the front of the history.
-  for (const job of [...jobs].reverse()) {
-    if (job.downloaded && !failedDates.has(job.metadata.date)) {
-      retained = upsertMetadata(retained, job.metadata);
-    }
-  }
+  // Every download has landed, so this listing holds for the rest of the run.
+  const imageDates = await deps.listImageDates(deps.dataFolder);
+  const retain = (selectedDate: string | undefined) => retainedMetadata(stored, jobs, failedDates, imageDates, selectedDate);
 
   // Read once this run's apply has settled, so a wallpaper it just applied counts as the selected one.
-  const appliedDate = (await deps.readState(deps.dataFolder))?.selectedDate;
-  if (appliedDate) {
-    retained = await keepSelectedEntry(retained, stored, appliedDate, failedDates, deps);
+  let selectedDate = (await deps.readState(deps.dataFolder))?.selectedDate;
+  let retained = retain(selectedDate);
+  await deps.writeMetadata(deps.dataFolder, retained);
+  // An explicit selection can land while the metadata is written; its entry and image must stay too.
+  const latestSelectedDate = (await deps.readState(deps.dataFolder))?.selectedDate;
+  if (latestSelectedDate !== selectedDate) {
+    selectedDate = latestSelectedDate;
+    retained = retain(selectedDate);
+    await deps.writeMetadata(deps.dataFolder, retained);
   }
 
-  await deps.writeMetadata(deps.dataFolder, retained);
   await pruneOrphanedImages({
     dataFolder: deps.dataFolder,
     entries: retained,
-    keepDates: appliedDate ? [appliedDate] : [],
-    listImageDates: deps.listImageDates,
+    keepDates: selectedDate ? [selectedDate] : [],
+    listImageDates: async () => imageDates,
     deleteImage: deps.deleteImage,
   });
 
@@ -122,29 +122,28 @@ async function pickTarget(jobs: ImageJob[], deps: RunDailyUpdateDeps): Promise<I
   return jobs.find((job) => job.metadata.date === state?.selectedDate) ?? jobs[0];
 }
 
-// The selected wallpaper stays in history beyond the retention cap, in its date-ordered place, so history and
-// the current-wallpaper lookup keep showing what is on the desktop. Its entry comes from the metadata as read
-// before the cap; one whose download failed this run is kept only while its image is still on disk.
-async function keepSelectedEntry(
-  retained: StoredImageMetadata[],
+// The stored history with this run's downloads upserted, capped at the retention limit. A failed date drops
+// out of history. The selected wallpaper is the exception to both: it stays beyond the cap, in its date-ordered
+// place, so history and the current-wallpaper lookup keep showing what is on the desktop, and it survives its
+// own failed download while its image is still on disk.
+function retainedMetadata(
   stored: StoredImageMetadata[],
-  selectedDate: string,
+  jobs: ImageJob[],
   failedDates: Set<string>,
-  deps: RunDailyUpdateDeps,
-): Promise<StoredImageMetadata[]> {
-  if (retained.some((entry) => entry.date === selectedDate)) {
-    return retained;
+  imageDates: string[],
+  selectedDate: string | undefined,
+): StoredImageMetadata[] {
+  let retained = stored.filter(
+    (entry) => !failedDates.has(entry.date) || (entry.date === selectedDate && imageDates.includes(entry.date)),
+  );
+  // Oldest first, so the newest ends up at the front of the history.
+  for (const job of [...jobs].reverse()) {
+    if (job.downloaded && !failedDates.has(job.metadata.date)) {
+      retained = upsertMetadata(retained, job.metadata, selectedDate);
+    }
   }
-  const selected = stored.find((entry) => entry.date === selectedDate);
-  if (!selected) {
-    return retained;
-  }
-  if (failedDates.has(selectedDate) && !(await deps.listImageDates(deps.dataFolder)).includes(selectedDate)) {
-    return retained;
-  }
-  const olderIndex = retained.findIndex((entry) => entry.date < selectedDate);
-  const at = olderIndex === -1 ? retained.length : olderIndex;
-  return [...retained.slice(0, at), selected, ...retained.slice(at)];
+  // A kept entry whose re-download failed was passed by the upserts of newer and older dates alike.
+  return retained.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 // Settles like `promise`, or rejects with the signal's reason as soon as it aborts, whichever comes first.

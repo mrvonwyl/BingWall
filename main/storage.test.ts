@@ -34,6 +34,26 @@ describe('upsertMetadata', () => {
     expect(result.map((e) => e.date)).not.toContain('2026-08-01');
     expect(result[0].date).toBe('2026-08-09');
   });
+
+  it('exempts the kept date from the cap, leaving it in its place on top of the newest 8', () => {
+    const existing = Array.from({ length: 8 }, (_, i) => entry(`2026-08-${String(8 - i).padStart(2, '0')}`));
+
+    const result = upsertMetadata(existing, entry('2026-08-09'), '2026-08-01');
+
+    expect(result.map((e) => e.date)).toEqual([
+      '2026-08-09', '2026-08-08', '2026-08-07', '2026-08-06', '2026-08-05', '2026-08-04', '2026-08-03', '2026-08-02',
+      '2026-08-01',
+    ]);
+  });
+
+  it('still caps at 8 when the kept date is among the newest 8', () => {
+    const existing = Array.from({ length: 8 }, (_, i) => entry(`2026-08-${String(8 - i).padStart(2, '0')}`));
+
+    const result = upsertMetadata(existing, entry('2026-08-09'), '2026-08-05');
+
+    expect(result).toHaveLength(8);
+    expect(result.map((e) => e.date)).not.toContain('2026-08-01');
+  });
 });
 
 describe('listImageDates + deleteImage', () => {
