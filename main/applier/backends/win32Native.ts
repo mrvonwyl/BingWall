@@ -59,6 +59,9 @@ export const win32Native: Win32Native = {
     return SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, imagePath, SPIF_UPDATEINIFILE) !== 0;
   },
 
+  // Reliable as a separate call: koffi (since 2.6.10) saves the thread's last-error value after every
+  // foreign call and restores it before the next one, so Node/V8 work in between can't clobber it.
+  // Must still be the very next koffi call after the failed one.
   getLastError() {
     return GetLastError() as number;
   },
