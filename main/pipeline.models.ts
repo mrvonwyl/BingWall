@@ -1,4 +1,5 @@
 import type { DisplaySize, FetchImpl, ImageResolution, Market, StoredImageMetadata } from './bing.models.js';
+import type { ApplyOutcome } from './applier/applier.models.js';
 import type { WallpaperState } from './state.models.js';
 
 export type RunDailyUpdateDeps = {
@@ -13,7 +14,8 @@ export type RunDailyUpdateDeps = {
   readMetadata: (folder: string) => Promise<StoredImageMetadata[]>;
   writeMetadata: (folder: string, entries: StoredImageMetadata[]) => Promise<void>;
   saveImage: (folder: string, date: string, data: ArrayBuffer) => Promise<string>;
-  setWallpaper: (imagePath: string) => Promise<void>;
+  // The applier host's `apply`: resolves with the outcome, never rejects for an apply failure.
+  setWallpaper: (imagePath: string) => Promise<ApplyOutcome>;
   listImageDates: (folder: string) => Promise<string[]>;
   deleteImage: (folder: string, date: string) => Promise<void>;
   writeState: (folder: string, state: WallpaperState) => Promise<void>;

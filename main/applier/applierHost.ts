@@ -68,17 +68,6 @@ export class ApplyFailedError extends Error {
   }
 }
 
-// Adapts the host to the callers' current `Promise<void>` contract: applied and
-// superseded resolve, an error rejects.
-export function toSetWallpaper(host: ApplierHost): (path: string) => Promise<void> {
-  return async (path) => {
-    const outcome = await host.apply(path);
-    if (outcome.kind === 'error') {
-      throw new ApplyFailedError(outcome);
-    }
-  };
-}
-
 function parseOutcome(message: unknown): ({ id: number } & ApplyOutcome) | null {
   if (typeof message !== 'object' || message === null) {
     return null;

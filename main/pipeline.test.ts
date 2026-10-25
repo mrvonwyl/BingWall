@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { runDailyUpdate } from './pipeline.js';
 import type { RunDailyUpdateDeps } from './pipeline.models.js';
 import type { HPImageArchiveResponse } from './bing.models.js';
+import type { ApplyOutcome } from './applier/applier.models.js';
+import { ApplyFailedError } from './applier/applierHost.js';
 
 const sampleResponse: HPImageArchiveResponse = {
   images: [
@@ -58,7 +60,7 @@ function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateD
     readMetadata: vi.fn(async () => []),
     writeMetadata: vi.fn(async () => undefined),
     saveImage: vi.fn(async (folder: string, date: string) => `${folder}\\${date}.jpg`),
-    setWallpaper: vi.fn(async () => undefined),
+    setWallpaper: vi.fn(async (): Promise<ApplyOutcome> => ({ kind: 'applied' })),
     listImageDates: vi.fn(async () => ['2026-08-16']),
     deleteImage: vi.fn(async () => undefined),
     writeState: vi.fn(async () => undefined),
@@ -99,6 +101,28 @@ describe('runDailyUpdate', () => {
     expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
     expect(deps.writeState).toHaveBeenCalledWith(deps.dataFolder, { selectedDate: '2026-08-16' });
     expect(result.wallpaperChanged).toBe(true);
+  });
+
+  it('writes no state when a newer apply superseded the refresh apply', async () => {
+    const deps = buildDeps({ setWallpaper: vi.fn(async (): Promise<ApplyOutcome> => ({ kind: 'superseded' })) });
+
+    const result = await runDailyUpdate(deps);
+
+    expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg');
+    expect(deps.writeState).not.toHaveBeenCalled();
+    expect(result.wallpaperChanged).toBe(false);
+  });
+
+  it('fails with the typed apply error and keeps the last applied selection when the apply fails', async () => {
+    const deps = buildDeps({
+      setWallpaper: vi.fn(async (): Promise<ApplyOutcome> => ({ kind: 'error', error: 'os-rejected', code: 1813 })),
+    });
+
+    const rejection = await runDailyUpdate(deps).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(ApplyFailedError);
+    expect((rejection as ApplyFailedError).outcome).toEqual({ kind: 'error', error: 'os-rejected', code: 1813 });
+    expect(deps.writeState).not.toHaveBeenCalled();
   });
 
   it('requests the overridden resolution instead of the one inferred from the display', async () => {
