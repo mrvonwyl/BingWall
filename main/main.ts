@@ -8,7 +8,6 @@ import { ApplyFailedError, createApplierHost } from './applier/applierHost.js';
 import { checkForUpdates } from './autoUpdate.js';
 import { readBootstrapPointer, writeBootstrapPointer } from './bootstrap.js';
 import { getCurrentWallpaper } from './currentWallpaper.js';
-import { watchForDevReload } from './devReload.js';
 import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
 import { downloadWallpaper } from './download.js';
 import { shouldOpenExternally } from './externalLinks.js';
@@ -326,6 +325,8 @@ app.whenReady().then(async () => {
   void safeRefreshWallpaper();
 
   if (!app.isPackaged && process.env.BINGWALL_DEV_RELOAD === '1') {
+    // Imported lazily: devReload pulls in chokidar, a devDependency that isn't shipped in the packaged app.
+    const { watchForDevReload } = await import('./devReload.js');
     watchForDevReload(projectRoot, () => mainWindow);
   }
 
