@@ -2,6 +2,7 @@ import "./index.models.js";
 import type {
   HistoryItemPayload,
   RefreshResultPayload,
+  Settings,
   StoredImageMetadata,
 } from "./index.models.js";
 
@@ -9,6 +10,9 @@ import type {
 let historyItems: HistoryItemPayload[] = [];
 let selectedIndex = -1;
 let applyRequestId = 0;
+// The renderer's copy of the saved settings. Every settings change sends the whole object back,
+// so it must follow changes made in the main process too.
+let settings: Settings | undefined;
 
 function byId<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -216,6 +220,10 @@ async function applySelection(): Promise<void> {
 
   const requestId = ++applyRequestId;
   const reply = await window.bingwall.selectWallpaper(item.metadata.date);
+  // Even a stale reply's settings change is already saved, so the settings pane shows it regardless.
+  if (reply?.status === "applied" && reply.updatedSettings) {
+    showSettings(reply.updatedSettings);
+  }
   // Stale replies and superseded requests change nothing: a newer request owns the outcome.
   if (!reply || requestId !== applyRequestId || reply.status === "superseded") {
     return;
@@ -390,46 +398,44 @@ function renderDownloadButton(): void {
   });
 }
 
+function showSettings(next: Settings): void {
+  settings = next;
+  byId<HTMLInputElement>("auto-refresh-checkbox").checked =
+    next.dailyAutoRefresh;
+  byId<HTMLSelectElement>("resolution-select").value =
+    next.resolutionOverride ?? "";
+  byId<HTMLSelectElement>("market-select").value = next.market;
+}
+
 async function renderSettings(): Promise<void> {
   const checkbox = byId<HTMLInputElement>("auto-refresh-checkbox");
   const resolutionSelect = byId<HTMLSelectElement>("resolution-select");
   const marketSelect = byId<HTMLSelectElement>("market-select");
-  let settings = await window.bingwall.getSettings();
-  checkbox.checked = settings.dailyAutoRefresh;
-  resolutionSelect.value = settings.resolutionOverride ?? "";
-  marketSelect.value = settings.market;
+  showSettings(await window.bingwall.getSettings());
+
+  const update = async (change: Partial<Settings>): Promise<void> => {
+    if (!settings) {
+      return;
+    }
+    settings = await window.bingwall.updateSettings({ ...settings, ...change });
+  };
 
   marketSelect.addEventListener("change", () => {
-    void (async () => {
-      settings = await window.bingwall.updateSettings({
-        ...settings,
-        market: marketSelect.value as typeof settings.market,
-      });
-    })();
+    void update({ market: marketSelect.value as Settings["market"] });
   });
 
   checkbox.addEventListener("change", () => {
-    void (async () => {
-      settings = await window.bingwall.updateSettings({
-        ...settings,
-        dailyAutoRefresh: checkbox.checked,
-      });
-    })();
+    void update({ dailyAutoRefresh: checkbox.checked });
   });
 
   resolutionSelect.addEventListener("change", () => {
-    void (async () => {
-      const resolutionOverride =
-        resolutionSelect.value === ""
-          ? null
-          : (resolutionSelect.value as NonNullable<
-              typeof settings.resolutionOverride
-            >);
-      settings = await window.bingwall.updateSettings({
-        ...settings,
-        resolutionOverride,
-      });
-    })();
+    const resolutionOverride =
+      resolutionSelect.value === ""
+        ? null
+        : (resolutionSelect.value as NonNullable<
+            Settings["resolutionOverride"]
+          >);
+    void update({ resolutionOverride });
   });
 }
 
