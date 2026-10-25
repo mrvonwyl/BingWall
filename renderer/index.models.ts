@@ -27,7 +27,8 @@ export type Settings = {
 };
 
 export type RefreshResultPayload =
-  | { ok: true; current: CurrentWallpaperPayload }
+  // `warning` is set when the refresh went ahead but some images failed to download.
+  | { ok: true; current: CurrentWallpaperPayload; warning?: string }
   | { ok: false; error: string };
 
 // Reply to select-wallpaper (null when the date isn't in history). A superseded request was replaced

@@ -14,7 +14,8 @@ import { downloadWallpaper } from './download.js';
 import { shouldOpenExternally } from './externalLinks.js';
 import { getHistory } from './history.js';
 import { runDailyUpdate } from './pipeline.js';
-import { describeRefreshError } from './refreshError.js';
+import type { RunDailyUpdateResult } from './pipeline.models.js';
+import { describePartialDownloadFailure, describeRefreshError } from './refreshError.js';
 import { readSettings, writeSettings } from './settings.js';
 import type { Settings } from './settings.models.js';
 import { selectWallpaper } from './selectWallpaper.js';
@@ -155,14 +156,14 @@ async function toWallpaperPayload(result: CurrentWallpaperResult) {
 }
 
 type RefreshResult =
-  | { ok: true; current: Awaited<ReturnType<typeof toWallpaperPayload>> }
+  | { ok: true; current: Awaited<ReturnType<typeof toWallpaperPayload>>; warning?: string }
   | { ok: false; error: string };
 
-async function refreshWallpaper(replaceExisting: boolean): Promise<void> {
+async function refreshWallpaper(replaceExisting: boolean): Promise<RunDailyUpdateResult> {
   const settings = await readSettings(getDataFolder());
 
   // A market switch re-applies the selected wallpaper from its new file inside the pipeline.
-  await runDailyUpdate({
+  return runDailyUpdate({
     fetchImpl: fetch,
     market: settings.market,
     replaceExisting,
@@ -184,9 +185,13 @@ async function performRefresh(replaceExisting = false): Promise<RefreshResult> {
   let result: RefreshResult;
 
   try {
-    await refreshWallpaper(replaceExisting);
+    const { failedDates } = await refreshWallpaper(replaceExisting);
     const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
     result = { ok: true, current: await toWallpaperPayload(current) };
+    if (failedDates.length > 0) {
+      console.warn('BingWall: some images failed to download', failedDates);
+      result.warning = describePartialDownloadFailure(failedDates);
+    }
   } catch (error) {
     console.error('BingWall: refresh failed', error);
     result = { ok: false, error: describeRefreshError(error) };

@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { ApplyFailedError } from './applier/applierHost.js';
-import { describeRefreshError } from './refreshError.js';
+import { describePartialDownloadFailure, describeRefreshError } from './refreshError.js';
+
+describe('describePartialDownloadFailure', () => {
+  it('says that some images failed to download and which days are missing', () => {
+    const result = describePartialDownloadFailure(['2026-08-15', '2026-08-13']);
+
+    expect(result).toBe(
+      'Some images failed to download, so these days are missing from history: 2026-08-15, 2026-08-13.',
+    );
+  });
+});
 
 describe('describeRefreshError', () => {
   it('labels HTTP-status errors as a Bing API error', () => {
