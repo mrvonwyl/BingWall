@@ -17,9 +17,9 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
   const newestMetadata = toStoredMetadata(images[0]);
   const resolution = deps.resolutionOverride ?? 'UHD';
 
-  let retained = await deps.readMetadata(deps.dataFolder);
+  const stored = await deps.readMetadata(deps.dataFolder);
   signal?.throwIfAborted();
-  const existingDates = new Set(retained.map((entry) => entry.date));
+  const existingDates = new Set(stored.map((entry) => entry.date));
 
   // Every download starts at once; each image lands on disk independently.
   const jobs: ImageJob[] = images.map((entry) => {
@@ -65,7 +65,7 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
       failedDates.add(job.metadata.date);
     }
   });
-  retained = retained.filter((entry) => !failedDates.has(entry.date));
+  let retained = stored.filter((entry) => !failedDates.has(entry.date));
 
   // Oldest first, so the newest ends up at the front of the history.
   for (const job of [...jobs].reverse()) {
@@ -74,8 +74,13 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
     }
   }
 
-  await deps.writeMetadata(deps.dataFolder, retained);
+  // Read once this run's apply has settled, so a wallpaper it just applied counts as the selected one.
   const appliedDate = (await deps.readState(deps.dataFolder))?.selectedDate;
+  if (appliedDate) {
+    retained = await keepSelectedEntry(retained, stored, appliedDate, failedDates, deps);
+  }
+
+  await deps.writeMetadata(deps.dataFolder, retained);
   await pruneOrphanedImages({
     dataFolder: deps.dataFolder,
     entries: retained,
@@ -115,6 +120,31 @@ async function pickTarget(jobs: ImageJob[], deps: RunDailyUpdateDeps): Promise<I
   }
   const state = await deps.readState(deps.dataFolder);
   return jobs.find((job) => job.metadata.date === state?.selectedDate) ?? jobs[0];
+}
+
+// The selected wallpaper stays in history beyond the retention cap, in its date-ordered place, so history and
+// the current-wallpaper lookup keep showing what is on the desktop. Its entry comes from the metadata as read
+// before the cap; one whose download failed this run is kept only while its image is still on disk.
+async function keepSelectedEntry(
+  retained: StoredImageMetadata[],
+  stored: StoredImageMetadata[],
+  selectedDate: string,
+  failedDates: Set<string>,
+  deps: RunDailyUpdateDeps,
+): Promise<StoredImageMetadata[]> {
+  if (retained.some((entry) => entry.date === selectedDate)) {
+    return retained;
+  }
+  const selected = stored.find((entry) => entry.date === selectedDate);
+  if (!selected) {
+    return retained;
+  }
+  if (failedDates.has(selectedDate) && !(await deps.listImageDates(deps.dataFolder)).includes(selectedDate)) {
+    return retained;
+  }
+  const olderIndex = retained.findIndex((entry) => entry.date < selectedDate);
+  const at = olderIndex === -1 ? retained.length : olderIndex;
+  return [...retained.slice(0, at), selected, ...retained.slice(at)];
 }
 
 // Settles like `promise`, or rejects with the signal's reason as soon as it aborts, whichever comes first.
