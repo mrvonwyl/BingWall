@@ -235,13 +235,15 @@ ipcMain.handle('select-wallpaper', async (_event, date: string) => {
     readMetadata,
     setWallpaper,
     writeState,
+    readSettings,
+    writeSettings,
   });
 
   switch (result?.status) {
     case undefined:
       return null;
     case 'applied':
-      return { status: 'applied', current: await toWallpaperPayload(result) };
+      return { status: 'applied', current: await toWallpaperPayload(result), updatedSettings: result.updatedSettings };
     case 'superseded':
       return { status: 'superseded' };
     case 'error':
