@@ -22,3 +22,30 @@ export type BurstVerdict = {
   // The last request was applied and is the wallpaper that ended up set.
   lastImageWins: boolean;
 };
+
+// One simulated key-hold through the real applier child.
+export type BurstTrial = {
+  round: number;
+  requests: BurstRequest[];
+  verdict: BurstVerdict;
+  // Worst time the profiler's main thread spent posting one request.
+  maxPostMs: number;
+  // From the start of the burst; null when no sampled pixel changed.
+  firstVisibleMs: number | null;
+  // When the desktop stopped changing, from the last request sent; null when nothing changed.
+  settledAfterLastMs: number | null;
+  settled: boolean;
+  maxExplorerPingMs: number;
+  explorerPings: number;
+  maxScreenSampleGapMs: number;
+  explorerCpuMs: number | null;
+  accentChanged: boolean;
+};
+
+export type BurstSummary = {
+  bursts: number;
+  passed: number;
+  worstExplorerHangMs: number | null;
+  // Every burst ended on its last requested image.
+  lastImageWins: boolean;
+};

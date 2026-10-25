@@ -1,12 +1,15 @@
+import type { ApplierCapabilities } from '../../main/applier/applier.models.js';
+import type { BurstSummary, BurstTrial } from './burst.models.js';
 import type { Monitor } from './desktopWallpaperCom.models.js';
 
 export type InputKind = 'full-jpg' | 'full-bmp' | 'prescaled-jpg' | 'prescaled-bmp';
 
-// 'per-monitor': one SetWallpaper(monitorId, …) per monitor, as the app does today.
+// 'per-monitor': one SetWallpaper(monitorId, …) per monitor, as the app did before #45.
 // 'all': a single SetWallpaper(NULL, …) for every monitor.
 // 'spi': style in the registry, then SystemParametersInfo(SPI_SETDESKWALLPAPER, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE).
 // 'active-desktop': IActiveDesktop SetWallpaper + SetWallpaperOptions + ApplyChanges.
-export type CallMode = 'per-monitor' | 'all' | 'spi' | 'active-desktop';
+// 'utility': an apply message to the real applier child (dist/main/applier/applierChild.js) in a utilityProcess.
+export type CallMode = 'per-monitor' | 'all' | 'spi' | 'active-desktop' | 'utility';
 
 export type Variant = { input: InputKind; mode: CallMode };
 
@@ -28,7 +31,7 @@ export type Trial = {
   round: number;
   source: string;
   stages: Stage[];
-  // Wall time the calling (Electron main) thread was blocked inside the apply.
+  // Wall time the calling (Electron main) thread was blocked inside the apply; for 'utility', the postMessage.
   blockMs: number;
   // From apply start; null when no sampled pixel changed.
   firstVisibleMs: number | null;
@@ -72,5 +75,10 @@ export type ProfileReport = {
   monitors: Monitor[];
   images: ImageSet[];
   settleMs: number;
+  // The applier child used by the utility variant and bursts; null when neither ran.
+  applier: { childPath: string; capabilities: ApplierCapabilities } | null;
   trials: Trial[];
+  // Set when the run was a --burst run (which skips the variant trials).
+  burst: { ratePerSecond: number; durationMs: number; summary: BurstSummary } | null;
+  bursts: BurstTrial[];
 };

@@ -1,5 +1,6 @@
 import path from 'node:path';
-import type { BurstRequest, BurstVerdict } from './burst.models.js';
+import type { BurstRequest, BurstSummary, BurstTrial, BurstVerdict } from './burst.models.js';
+import { summarise } from './summary.js';
 
 // When each request of a simulated key-hold is sent, in ms from the start of the burst.
 export function burstOffsets(ratePerSecond: number, durationMs: number): number[] {
@@ -20,6 +21,16 @@ export function evaluateBurst(requests: BurstRequest[], landedPath: string | nul
     lastRequestedPath: last?.path ?? null,
     landedPath,
     lastImageWins: last?.outcome?.kind === 'applied' && landedPath !== null && samePath(landedPath, last.path),
+  };
+}
+
+export function summariseBursts(trials: Pick<BurstTrial, 'maxExplorerPingMs' | 'verdict'>[]): BurstSummary {
+  const passed = trials.filter((trial) => trial.verdict.lastImageWins).length;
+  return {
+    bursts: trials.length,
+    passed,
+    worstExplorerHangMs: summarise(trials.map((trial) => trial.maxExplorerPingMs)).worst,
+    lastImageWins: trials.length > 0 && passed === trials.length,
   };
 }
 

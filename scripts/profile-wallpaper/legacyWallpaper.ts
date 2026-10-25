@@ -9,6 +9,7 @@ import './desktopWallpaperCom.js';
 // HKEY_CURRENT_USER is (HKEY)(LONG)0x80000001, i.e. sign-extended on x64.
 const HKEY_CURRENT_USER = -2147483647;
 const REG_SZ = 1;
+const RRF_RT_REG_SZ = 0x02;
 const RRF_RT_REG_DWORD = 0x10;
 
 const SPI_SETDESKWALLPAPER = 0x0014;
@@ -56,7 +57,7 @@ const RegSetKeyValueW = advapi32.func(
   'long __stdcall RegSetKeyValueW(intptr_t hkey, const char16_t *subKey, const char16_t *valueName, uint32_t type, const char16_t *data, uint32_t cbData)',
 );
 const RegGetValueW = advapi32.func(
-  'long __stdcall RegGetValueW(intptr_t hkey, const char16_t *subKey, const char16_t *value, uint32_t flags, void *type, _Out_ uint32_t *data, _Inout_ uint32_t *cbData)',
+  'long __stdcall RegGetValueW(intptr_t hkey, const char16_t *subKey, const char16_t *value, uint32_t flags, void *type, _Out_ void *data, _Inout_ uint32_t *cbData)',
 );
 const CoCreateInstance = ole32.func(
   'long __stdcall CoCreateInstance(const GUID *rclsid, void *pUnkOuter, uint32_t dwClsContext, const GUID *riid, _Out_ void **ppv)',
@@ -86,10 +87,23 @@ function setUserString(subKey: string, name: string, value: string): void {
 
 // Null when the value doesn't exist.
 export function readUserDword(subKey: string, name: string): number | null {
-  const data: number[] = [0];
-  const size: number[] = [4];
+  const data = Buffer.alloc(4);
+  const size: number[] = [data.length];
   const status: number = RegGetValueW(HKEY_CURRENT_USER, subKey, name, RRF_RT_REG_DWORD, null, data, size);
-  return status === 0 ? data[0] >>> 0 : null;
+  return status === 0 ? data.readUInt32LE(0) : null;
+}
+
+// Null when the value doesn't exist. The buffer fits any path the registry can hold.
+export function readUserString(subKey: string, name: string): string | null {
+  const data = Buffer.alloc(32_768 * 2);
+  const size: number[] = [data.length];
+  const status: number = RegGetValueW(HKEY_CURRENT_USER, subKey, name, RRF_RT_REG_SZ, null, data, size);
+  if (status !== 0) {
+    return null;
+  }
+  const text = data.toString('utf16le', 0, size[0]);
+  const terminator = text.indexOf('\0');
+  return terminator === -1 ? text : text.slice(0, terminator);
 }
 
 // What the classic Personalize page and SPI-based tools do: style in the registry,

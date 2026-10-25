@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { burstOffsets, evaluateBurst } from './burst.js';
-import type { BurstRequest } from './burst.models.js';
+import { burstOffsets, evaluateBurst, summariseBursts } from './burst.js';
+import type { BurstRequest, BurstTrial } from './burst.models.js';
 
 function request(path: string, outcome: BurstRequest['outcome']): BurstRequest {
   return { path, sentAtMs: 0, outcome, repliedAtMs: outcome ? 1 : null };
@@ -64,5 +64,26 @@ describe('evaluateBurst', () => {
     const verdict = evaluateBurst([request('C:\\Burst\\000.JPG', { kind: 'applied' })], 'c:\\burst\\000.jpg');
 
     expect(verdict.lastImageWins).toBe(true);
+  });
+});
+
+describe('summariseBursts', () => {
+  function trial(maxExplorerPingMs: number, lastImageWins: boolean): Pick<BurstTrial, 'maxExplorerPingMs' | 'verdict'> {
+    const verdict = evaluateBurst([request('C:\\a.jpg', { kind: 'applied' })], lastImageWins ? 'C:\\a.jpg' : 'C:\\b.jpg');
+    return { maxExplorerPingMs, verdict };
+  }
+
+  it('reports the worst Explorer hang over all bursts and passes only if every burst ended on its last image', () => {
+    expect(summariseBursts([trial(40, true), trial(75, true)])).toEqual({
+      bursts: 2,
+      passed: 2,
+      worstExplorerHangMs: 75,
+      lastImageWins: true,
+    });
+    expect(summariseBursts([trial(40, true), trial(30, false)])).toMatchObject({ passed: 1, lastImageWins: false });
+  });
+
+  it('does not pass with no bursts run', () => {
+    expect(summariseBursts([])).toEqual({ bursts: 0, passed: 0, worstExplorerHangMs: null, lastImageWins: false });
   });
 });
