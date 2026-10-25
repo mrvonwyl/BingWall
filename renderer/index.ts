@@ -11,6 +11,8 @@ let historyItems: HistoryItemPayload[] = [];
 let selectedIndex = -1;
 let applyRequestId = 0;
 let settingsRequestId = 0;
+// The OS regional format locale, loaded before anything is rendered.
+let systemLocale: string;
 
 function byId<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -79,15 +81,15 @@ function renderWallpaperInfo(
   infoEl.classList.add("changing");
 }
 
+// Formats a `YYYY-MM-DD` date as a numeric date in the OS regional format, e.g. 25.10.2026 for de-CH.
 function formatDate(date: string): string {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) {
     return date;
   }
-  return parsed.toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
+  return parsed.toLocaleDateString(systemLocale, {
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
   });
 }
@@ -127,7 +129,7 @@ function buildThumbnail(
   button.setAttribute("role", "option");
   button.setAttribute(
     "aria-label",
-    `${item.metadata.title} (${item.metadata.date})`,
+    `${item.metadata.title} (${formatDate(item.metadata.date)})`,
   );
 
   const img = document.createElement("img");
@@ -138,7 +140,7 @@ function buildThumbnail(
 
   const date = document.createElement("span");
   date.className = "thumb-date";
-  date.textContent = item.metadata.date;
+  date.textContent = formatDate(item.metadata.date);
 
   button.append(img, date);
   button.addEventListener("click", () => {
@@ -474,7 +476,11 @@ async function renderDataFolder(): Promise<void> {
 }
 
 async function render(): Promise<void> {
-  const current = await window.bingwall.getCurrentWallpaper();
+  const [current, locale] = await Promise.all([
+    window.bingwall.getCurrentWallpaper(),
+    window.bingwall.getSystemLocale(),
+  ]);
+  systemLocale = locale;
 
   renderEmptyState(!current);
   if (current) {

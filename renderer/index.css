@@ -31,7 +31,7 @@ body {
 
 body {
   position: relative;
-  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   color: var(--text);
   background: #000;
   user-select: none;
@@ -79,8 +79,17 @@ svg {
 #scrim {
   pointer-events: none;
   background:
-    radial-gradient(ellipse 70% 60% at 0% 0%, rgba(0, 0, 0, 0.55), transparent 70%),
-    linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.25) 22%, transparent 38%);
+    radial-gradient(
+      ellipse 70% 60% at 0% 0%,
+      rgba(0, 0, 0, 0.55),
+      transparent 70%
+    ),
+    linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.7) 0%,
+      rgba(0, 0, 0, 0.25) 22%,
+      transparent 38%
+    );
 }
 
 /* ---------- Info (top left) ---------- */
@@ -116,7 +125,7 @@ svg {
 
 #wallpaper-title {
   margin: 0 0 0.5rem;
-  font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   font-size: clamp(1.4rem, 3.2vw, 2.6rem);
   font-weight: 600;
   line-height: 1.15;
@@ -207,7 +216,7 @@ svg {
   transition: transform 500ms var(--ease);
 }
 
-#settings-button[aria-expanded='true'] svg {
+#settings-button[aria-expanded="true"] svg {
   transform: rotate(90deg);
 }
 
@@ -289,7 +298,13 @@ svg {
   padding: 1vh 0;
   overflow: hidden;
   border-radius: 10px;
-  mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 4%,
+    #000 96%,
+    transparent
+  );
 }
 
 #history-viewport:focus-visible {
@@ -342,7 +357,7 @@ svg {
   padding: 1.2rem 0.5rem 0.3rem;
   font-size: 0.7rem;
   font-weight: 600;
-  text-align: left;
+  text-align: right;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
 }
 
@@ -496,7 +511,7 @@ svg {
   cursor: pointer;
 }
 
-input[role='switch'] {
+input[role="switch"] {
   position: relative;
   flex: 0 0 auto;
   width: 2.6rem;
@@ -510,8 +525,8 @@ input[role='switch'] {
   transition: background 200ms ease;
 }
 
-input[role='switch']::before {
-  content: '';
+input[role="switch"]::before {
+  content: "";
   position: absolute;
   top: 50%;
   left: 0.2rem;
@@ -523,12 +538,12 @@ input[role='switch']::before {
   transition: transform 200ms var(--ease);
 }
 
-input[role='switch']:checked {
+input[role="switch"]:checked {
   border-color: var(--accent);
   background: var(--accent);
 }
 
-input[role='switch']:checked::before {
+input[role="switch"]:checked::before {
   background: #000;
   transform: translate(1.2rem, -50%);
 }
@@ -550,7 +565,7 @@ select option {
 }
 
 #data-folder-path {
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 0.78rem;
   color: var(--text-muted);
   word-break: break-all;

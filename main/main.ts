@@ -288,6 +288,10 @@ ipcMain.handle('refresh-wallpaper', async () => {
   return performRefresh();
 });
 
+ipcMain.handle('get-system-locale', () => {
+  return app.getSystemLocale();
+});
+
 ipcMain.handle('get-data-folder', () => {
   return getDataFolder();
 });

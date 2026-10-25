@@ -11,6 +11,7 @@ const api: BingWallAPI = {
   onRefreshResult: (callback) => {
     ipcRenderer.on('refresh-result', (_event, result) => callback(result));
   },
+  getSystemLocale: () => ipcRenderer.invoke('get-system-locale'),
   getDataFolder: () => ipcRenderer.invoke('get-data-folder'),
   chooseDataFolder: () => ipcRenderer.invoke('choose-data-folder'),
   relocateDataFolder: (newFolder) => ipcRenderer.invoke('relocate-data-folder', newFolder),
