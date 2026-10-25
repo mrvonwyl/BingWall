@@ -5,14 +5,7 @@ import { pruneOrphanedImages } from './history.js';
 import { upsertMetadata } from './storage.js';
 import type { StoredImageMetadata } from './bing.models.js';
 import type { ApplyOutcome } from './applier/applier.models.js';
-import type { RunDailyUpdateDeps, RunDailyUpdateResult } from './pipeline.models.js';
-
-type ImageJob = {
-  metadata: StoredImageMetadata;
-  downloaded: boolean;
-  // Resolves with the image's path once it is on disk.
-  landed: Promise<string>;
-};
+import type { ImageJob, RunDailyUpdateDeps, RunDailyUpdateResult } from './pipeline.models.js';
 
 // Once `deps.signal` aborts, the refresh writes no more files, metadata or state, makes no apply, and
 // rejects with the signal's reason as soon as no file write is under way.

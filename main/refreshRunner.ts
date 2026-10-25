@@ -1,11 +1,4 @@
-import type { RefreshRunner, RefreshRunnerDeps, RefreshRunOutcome } from './refreshRunner.models.js';
-
-type InFlight = {
-  controller: AbortController;
-  replaceExisting: boolean;
-  // Resolves once the run has settled either way, so no file write is under way any more.
-  settled: Promise<void>;
-};
+import type { InFlight, RefreshRunner, RefreshRunnerDeps, RefreshRunOutcome } from './refreshRunner.models.js';
 
 // Runs one refresh at a time: a new refresh (daily, manual, timer, market switch) aborts the one in flight.
 export function createRefreshRunner<T>(deps: RefreshRunnerDeps<T>): RefreshRunner<T> {
