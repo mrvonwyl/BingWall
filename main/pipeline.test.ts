@@ -277,6 +277,32 @@ describe('runDailyUpdate', () => {
     expect(writtenEntries.map((entry) => entry.date)).toEqual(['2026-08-16', '2026-08-15', '2026-08-14']);
   });
 
+  it('saves no file for an image whose download fails', async () => {
+    const gated = gatedFetch(multiDayResponse);
+    const deps = buildDeps({ fetchImpl: gated.fetchImpl, listImageDates: vi.fn(async () => []) });
+    gated.gateFor('Newest').resolve(new Uint8Array([1]).buffer);
+    gated.gateFor('Middle').reject(new Error('connection reset'));
+    gated.gateFor('Oldest').resolve(new Uint8Array([3]).buffer);
+
+    await runDailyUpdate(deps).catch(() => undefined);
+
+    expect(deps.saveImage).not.toHaveBeenCalledWith(deps.dataFolder, '2026-08-15', expect.anything());
+    expect(deps.saveImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-16', expect.any(ArrayBuffer));
+  });
+
+  it('applies nothing and fails when the target download fails', async () => {
+    const gated = gatedFetch(multiDayResponse);
+    const deps = buildDeps({ fetchImpl: gated.fetchImpl, listImageDates: vi.fn(async () => []) });
+    gated.gateFor('Newest').reject(new Error('connection reset'));
+    gated.gateFor('Middle').resolve(new Uint8Array([2]).buffer);
+    gated.gateFor('Oldest').resolve(new Uint8Array([3]).buffer);
+
+    await expect(runDailyUpdate(deps)).rejects.toThrow('connection reset');
+
+    expect(deps.setWallpaper).not.toHaveBeenCalled();
+    expect(deps.writeState).not.toHaveBeenCalled();
+  });
+
   describe('market switch (replaceExisting)', () => {
     function switchDeps(overrides: Partial<RunDailyUpdateDeps>) {
       return buildDeps({
