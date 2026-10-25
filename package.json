@@ -15,8 +15,8 @@
     "build": "npm run build:ts && electron-builder",
     "test": "vitest run",
     "build:profile": "tsc -p tsconfig.profile.json",
-    "profile:wallpaper": "npm run build:profile && electron dist-profile/profileWallpaper.js",
-    "profile:wallpaper:run": "electron dist-profile/profileWallpaper.js",
+    "profile:wallpaper": "npm run build:ts && npm run build:profile && electron dist-profile/scripts/profile-wallpaper/profileWallpaper.js",
+    "profile:wallpaper:run": "electron dist-profile/scripts/profile-wallpaper/profileWallpaper.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.scripts.json"
   },
   "devDependencies": {
