@@ -8,8 +8,9 @@ export type ApplierRequest = ApplyRequest | CapabilitiesRequest;
 // os-rejected: the OS refused the wallpaper (code = GetLastError()).
 // malformed-request: the child got a message it can't parse.
 // backend-failed: the backend threw unexpectedly.
-// applier-unavailable: the child died before replying (host side).
-export type ApplierErrorKind = 'os-rejected' | 'malformed-request' | 'backend-failed' | 'applier-unavailable';
+// applier-unavailable: the child kept dying, or the host is capped after repeated deaths (host side).
+// timeout: the child didn't answer within the watchdog and was killed (host side).
+export type ApplierErrorKind = 'os-rejected' | 'malformed-request' | 'backend-failed' | 'applier-unavailable' | 'timeout';
 
 export type ApplierError = { kind: 'error'; error: ApplierErrorKind; code?: number; message?: string };
 
