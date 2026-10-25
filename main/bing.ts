@@ -1,22 +1,11 @@
 import type {
   BingImageEntry,
-  DisplaySize,
   FetchImpl,
   HPImageArchiveResponse,
   ImageResolution,
   Market,
   StoredImageMetadata,
 } from './bing.models.js';
-
-const KNOWN_RESOLUTIONS: { resolution: ImageResolution; width: number; height: number }[] = [
-  { resolution: '1024x768', width: 1024, height: 768 },
-  { resolution: '1280x720', width: 1280, height: 720 },
-  { resolution: '1366x768', width: 1366, height: 768 },
-  { resolution: '1920x1080', width: 1920, height: 1080 },
-  { resolution: '1920x1200', width: 1920, height: 1200 },
-];
-
-const UHD_THRESHOLD = { width: 3840, height: 2160 };
 
 export async function fetchBingImages(fetchImpl: FetchImpl, market: string): Promise<BingImageEntry[]> {
   const url = `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=${market}`;
@@ -43,33 +32,6 @@ export async function fetchBingImagesWithFallback(fetchImpl: FetchImpl, market: 
   }
 
   return fetchBingImages(fetchImpl, fallback);
-}
-
-export function resolveImageResolution(
-  displays: DisplaySize[],
-  resolutionOverride: ImageResolution | null,
-): ImageResolution {
-  if (resolutionOverride) {
-    return resolutionOverride;
-  }
-
-  const largest = displays.reduce((best, candidate) =>
-    candidate.width * candidate.height > best.width * best.height ? candidate : best,
-  );
-
-  if (largest.width >= UHD_THRESHOLD.width && largest.height >= UHD_THRESHOLD.height) {
-    return 'UHD';
-  }
-
-  const fitting = KNOWN_RESOLUTIONS.filter(
-    (candidate) => candidate.width <= largest.width && candidate.height <= largest.height,
-  );
-
-  if (fitting.length === 0) {
-    return KNOWN_RESOLUTIONS[0].resolution;
-  }
-
-  return fitting.reduce((best, candidate) => (candidate.width > best.width ? candidate : best)).resolution;
 }
 
 export function buildImageUrl(entry: BingImageEntry, resolution: ImageResolution): string {

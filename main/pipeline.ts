@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { ApplyFailedError } from './applier/applierHost.js';
-import { buildImageUrl, downloadImage, fetchBingImagesWithFallback, resolveImageResolution, toStoredMetadata } from './bing.js';
+import { buildImageUrl, downloadImage, fetchBingImagesWithFallback, toStoredMetadata } from './bing.js';
 import { pruneOrphanedImages } from './history.js';
 import { upsertMetadata } from './storage.js';
 import type { RunDailyUpdateDeps, RunDailyUpdateResult } from './pipeline.models.js';
@@ -10,7 +10,7 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
   const newest = images[0];
   const newestMetadata = toStoredMetadata(newest);
 
-  const resolution = resolveImageResolution(deps.displays, deps.resolutionOverride);
+  const resolution = deps.resolutionOverride ?? 'UHD';
 
   let retained = await deps.readMetadata(deps.dataFolder);
   const existingDates = new Set(retained.map((entry) => entry.date));

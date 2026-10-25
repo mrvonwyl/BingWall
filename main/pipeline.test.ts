@@ -53,7 +53,6 @@ function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateD
     })),
     market: 'de-CH',
     replaceExisting: false,
-    displays: [{ width: 3840, height: 2160 }],
     resolutionOverride: null,
     dataFolder: 'C:\\fake\\Pictures\\BingWallpapers',
     dailyAutoRefresh: true,
@@ -125,7 +124,15 @@ describe('runDailyUpdate', () => {
     expect(deps.writeState).not.toHaveBeenCalled();
   });
 
-  it('requests the overridden resolution instead of the one inferred from the display', async () => {
+  it('downloads UHD images when no resolution override is set', async () => {
+    const deps = buildDeps();
+
+    await runDailyUpdate(deps);
+
+    expect(deps.fetchImpl).toHaveBeenCalledWith(expect.stringContaining('_UHD.jpg'));
+  });
+
+  it('requests the overridden resolution instead of UHD', async () => {
     const deps = buildDeps({ resolutionOverride: '1280x720' });
 
     await runDailyUpdate(deps);

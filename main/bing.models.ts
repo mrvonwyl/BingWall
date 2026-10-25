@@ -17,11 +17,6 @@ export type FetchImpl = (url: string) => Promise<{
   arrayBuffer: () => Promise<ArrayBuffer>;
 }>;
 
-export type DisplaySize = {
-  width: number;
-  height: number;
-};
-
 export type ImageResolution = '1024x768' | '1280x720' | '1366x768' | '1920x1080' | '1920x1200' | 'UHD';
 
 export type Market = 'en-US' | 'en-GB' | 'de-DE' | 'de-CH';

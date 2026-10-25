@@ -1,4 +1,4 @@
-import type { DisplaySize, FetchImpl, ImageResolution, Market, StoredImageMetadata } from './bing.models.js';
+import type { FetchImpl, ImageResolution, Market, StoredImageMetadata } from './bing.models.js';
 import type { ApplyOutcome } from './applier/applier.models.js';
 import type { WallpaperState } from './state.models.js';
 
@@ -7,7 +7,7 @@ export type RunDailyUpdateDeps = {
   market: Market;
   // Re-download dates that are already stored, e.g. after switching market.
   replaceExisting: boolean;
-  displays: DisplaySize[];
+  // Null means UHD.
   resolutionOverride: ImageResolution | null;
   dataFolder: string;
   dailyAutoRefresh: boolean;

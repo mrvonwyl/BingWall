@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, dialog, ipcMain, nativeImage, powerMonitor, screen, shell, utilityProcess } from 'electron';
+import { app, BrowserWindow, Tray, Menu, dialog, ipcMain, nativeImage, powerMonitor, shell, utilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
 import fs from 'node:fs/promises';
@@ -159,14 +159,12 @@ type RefreshResult =
   | { ok: false; error: string };
 
 async function refreshWallpaper(replaceExisting: boolean): Promise<void> {
-  const displays = screen.getAllDisplays().map((display) => ({ width: display.size.width, height: display.size.height }));
   const settings = await readSettings(getDataFolder());
 
   const result = await runDailyUpdate({
     fetchImpl: fetch,
     market: settings.market,
     replaceExisting,
-    displays,
     resolutionOverride: settings.resolutionOverride,
     dataFolder: getDataFolder(),
     dailyAutoRefresh: settings.dailyAutoRefresh,
