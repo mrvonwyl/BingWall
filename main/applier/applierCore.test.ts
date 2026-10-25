@@ -63,6 +63,36 @@ describe('applierCore', () => {
     ]);
   });
 
+  it('frees the slot and runs the pending request when posting a reply throws', async () => {
+    const { backend, calls } = fakeBackend();
+    const replies: ApplierReply[] = [];
+    const errors: unknown[] = [];
+    const core = createApplierCore({
+      backend,
+      postMessage: (reply) => {
+        if (reply.id === 1) {
+          throw new Error('channel closed');
+        }
+        replies.push(reply);
+      },
+      logError: (_message, error) => errors.push(error),
+    });
+
+    core.handleMessage({ id: 1, op: 'apply', path: 'C:\\a.jpg' });
+    core.handleMessage({ id: 2, op: 'apply', path: 'C:\\b.jpg' });
+    calls[0].resolve({ kind: 'applied' });
+    await flush();
+
+    expect(calls.map((call) => call.path)).toEqual(['C:\\a.jpg', 'C:\\b.jpg']);
+    calls[1].resolve({ kind: 'applied' });
+    await flush();
+    expect(replies).toEqual([{ id: 2, kind: 'applied' }]);
+    expect(errors).toEqual([new Error('channel closed')]);
+
+    core.handleMessage({ id: 3, op: 'apply', path: 'C:\\c.jpg' });
+    expect(calls.map((call) => call.path)).toEqual(['C:\\a.jpg', 'C:\\b.jpg', 'C:\\c.jpg']);
+  });
+
   it('evicts the pending request with superseded as soon as a newer one arrives', async () => {
     const { core, calls, replies } = setup();
 
