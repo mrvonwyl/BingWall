@@ -1,19 +1,23 @@
-import { app, BrowserWindow, Tray, Menu, dialog, ipcMain, nativeImage, powerMonitor, screen, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, dialog, ipcMain, nativeImage, powerMonitor, shell, utilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { ApplyFailedError, createApplierHost } from './applier/applierHost.js';
 import { checkForUpdates } from './autoUpdate.js';
 import { readBootstrapPointer, writeBootstrapPointer } from './bootstrap.js';
 import { getCurrentWallpaper } from './currentWallpaper.js';
 import { watchForDevReload } from './devReload.js';
 import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
 import { downloadWallpaper } from './download.js';
+import { shouldOpenExternally } from './externalLinks.js';
 import { getHistory } from './history.js';
-import { setNativeWallpaper } from './nativeWallpaper.js';
 import { runDailyUpdate } from './pipeline.js';
-import { describeRefreshError } from './refreshError.js';
+import type { RunDailyUpdateResult } from './pipeline.models.js';
+import { describePartialDownloadFailure, describeRefreshError } from './refreshError.js';
+import { createRefreshRunner } from './refreshRunner.js';
+import type { RefreshRun } from './refreshRunner.models.js';
 import { readSettings, writeSettings } from './settings.js';
 import type { Settings } from './settings.models.js';
 import { selectWallpaper } from './selectWallpaper.js';
@@ -22,6 +26,16 @@ import { deleteImage, getDefaultDataFolder, listImageDates, readMetadata, reloca
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..', '..');
+
+// Wallpapers are applied by a long-lived utilityProcess, so main never makes a blocking OS call.
+// Forked lazily on the first apply; Electron ends it with the app.
+const applierHost = createApplierHost({
+  forkApplier: () =>
+    utilityProcess.fork(path.join(__dirname, 'applier', 'applierChild.js'), [], { serviceName: 'BingWall wallpaper applier' }),
+  logError: (message, details) => console.error(message, details ?? ''),
+});
+// History selection and every refresh share this one host, ordered by arrival in main.
+const setWallpaper = (imagePath: string) => applierHost.apply(imagePath);
 
 const BACKGROUND_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -57,7 +71,11 @@ function createWindow(show: boolean): void {
   mainWindow.setAspectRatio(16 / 9);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (shouldOpenExternally(url)) {
+      void shell.openExternal(url);
+    } else {
+      console.warn(`Refused to open external link: ${url}`);
+    }
     return { action: 'deny' };
   });
 
@@ -139,47 +157,54 @@ async function toWallpaperPayload(result: CurrentWallpaperResult) {
   return { metadata: result.metadata, imageUrl: await toImageUrl(result.imagePath) };
 }
 
+// Mirrors RefreshResultPayload in preload.models.cts and renderer/index.models.ts.
 type RefreshResult =
-  | { ok: true; current: Awaited<ReturnType<typeof toWallpaperPayload>> }
-  | { ok: false; error: string };
+  | { ok: true; current: Awaited<ReturnType<typeof toWallpaperPayload>>; warning?: string }
+  | { ok: false; error: string }
+  | { superseded: true };
 
-async function refreshWallpaper(replaceExisting: boolean): Promise<void> {
-  const displays = screen.getAllDisplays().map((display) => ({ width: display.size.width, height: display.size.height }));
+async function refreshWallpaper({ replaceExisting, signal }: RefreshRun): Promise<RunDailyUpdateResult> {
   const settings = await readSettings(getDataFolder());
 
-  const result = await runDailyUpdate({
+  // A market switch re-applies the selected wallpaper from its new file inside the pipeline.
+  return runDailyUpdate({
     fetchImpl: fetch,
+    signal,
     market: settings.market,
     replaceExisting,
-    displays,
     resolutionOverride: settings.resolutionOverride,
     dataFolder: getDataFolder(),
     dailyAutoRefresh: settings.dailyAutoRefresh,
     readMetadata,
     writeMetadata,
     saveImage,
-    setWallpaper: setNativeWallpaper,
+    setWallpaper,
     listImageDates,
     deleteImage,
+    readState,
     writeState,
   });
-
-  // The selected wallpaper's file was just overwritten, so re-apply it to pick up the new image.
-  if (replaceExisting && !result.wallpaperChanged) {
-    const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
-    if (current) {
-      await setNativeWallpaper(current.imagePath);
-    }
-  }
 }
+
+// Every refresh (daily, manual, timer, resume/unlock, market switch) aborts the one in flight.
+const refreshRunner = createRefreshRunner({ run: refreshWallpaper });
 
 async function performRefresh(replaceExisting = false): Promise<RefreshResult> {
   let result: RefreshResult;
 
   try {
-    await refreshWallpaper(replaceExisting);
+    const outcome = await refreshRunner.refresh(replaceExisting);
+    if (outcome.status === 'aborted') {
+      // A newer refresh replaced this one and pushes its own result; this one reports nothing.
+      return { superseded: true };
+    }
+    const { failedDates } = outcome.value;
     const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
     result = { ok: true, current: await toWallpaperPayload(current) };
+    if (failedDates.length > 0) {
+      console.warn('BingWall: some images failed to download', failedDates);
+      result.warning = describePartialDownloadFailure(failedDates);
+    }
   } catch (error) {
     console.error('BingWall: refresh failed', error);
     result = { ok: false, error: describeRefreshError(error) };
@@ -208,11 +233,20 @@ ipcMain.handle('select-wallpaper', async (_event, date: string) => {
   const result = await selectWallpaper(date, {
     dataFolder: getDataFolder(),
     readMetadata,
-    setWallpaper: setNativeWallpaper,
+    setWallpaper,
     writeState,
   });
 
-  return toWallpaperPayload(result);
+  switch (result?.status) {
+    case undefined:
+      return null;
+    case 'applied':
+      return { status: 'applied', current: await toWallpaperPayload(result) };
+    case 'superseded':
+      return { status: 'superseded' };
+    case 'error':
+      return { status: 'error', error: result.error.error, message: describeRefreshError(new ApplyFailedError(result.error)) };
+  }
 });
 
 ipcMain.handle('download-wallpaper', async (_event, date: string) => {

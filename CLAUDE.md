@@ -9,5 +9,3 @@ This also means: no WSL. The Stream Deck app and this plugin's Node.js backend p
 Type/interface definitions (e.g. an action's settings type) live in a sibling `*.models.ts` file next to the module that uses them, not inline in the implementation file — e.g. `makro.ts` imports `MakroSettings` from `makro.models.ts`.
 
 Write all code in **TypeScript**, compiled/run as **ESM** (`"type": "module"`, `import`/`export`). Do not use CommonJS (`require`, `module.exports`) or plain `.js` source files — including in throwaway/scratch scripts run via `node -e`.
-
-**Exception:** the native wallpaper applier sidecar (`native/applier/`) is written in **Rust**. It is a standalone `.exe` that Electron spawns and talks to via NDJSON over stdio. Everything else stays TypeScript/ESM.

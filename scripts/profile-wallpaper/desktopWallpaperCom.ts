@@ -2,7 +2,7 @@ import koffi from 'koffi';
 import type { Guid, Monitor, Rect } from './desktopWallpaperCom.models.js';
 
 // Thin, un-opinionated IDesktopWallpaper wrapper: one method per COM call, so the
-// profiler can time each call individually. Mirrors main/nativeWallpaper.ts.
+// profiler can time each call individually. Mirrors the removed main/nativeWallpaper.ts (baseline).
 
 koffi.struct('GUID', {
   data1: 'uint32_t',

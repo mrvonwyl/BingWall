@@ -27,13 +27,24 @@ export type Settings = {
 };
 
 export type RefreshResultPayload =
-  | { ok: true; current: CurrentWallpaperPayload }
-  | { ok: false; error: string };
+  // `warning` is set when the refresh went ahead but some images failed to download.
+  | { ok: true; current: CurrentWallpaperPayload; warning?: string }
+  | { ok: false; error: string }
+  // A newer refresh replaced this one and reports its own result; this one changes nothing.
+  | { superseded: true };
+
+// Reply to select-wallpaper (null when the date isn't in history). A superseded request was replaced
+// by a newer one and changes nothing; an error leaves the previous wallpaper and selection in place.
+export type SelectWallpaperReply =
+  | { status: 'applied'; current: CurrentWallpaperPayload }
+  | { status: 'superseded' }
+  | { status: 'error'; error: string; message: string }
+  | null;
 
 export type BingWallAPI = {
   getCurrentWallpaper: () => Promise<CurrentWallpaperPayload>;
   getHistory: () => Promise<HistoryItemPayload[]>;
-  selectWallpaper: (date: string) => Promise<CurrentWallpaperPayload>;
+  selectWallpaper: (date: string) => Promise<SelectWallpaperReply>;
   getSettings: () => Promise<Settings>;
   updateSettings: (settings: Settings) => Promise<Settings>;
   refresh: () => Promise<RefreshResultPayload>;

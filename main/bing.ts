@@ -1,6 +1,5 @@
 import type {
   BingImageEntry,
-  DisplaySize,
   FetchImpl,
   HPImageArchiveResponse,
   ImageResolution,
@@ -8,19 +7,9 @@ import type {
   StoredImageMetadata,
 } from './bing.models.js';
 
-const KNOWN_RESOLUTIONS: { resolution: ImageResolution; width: number; height: number }[] = [
-  { resolution: '1024x768', width: 1024, height: 768 },
-  { resolution: '1280x720', width: 1280, height: 720 },
-  { resolution: '1366x768', width: 1366, height: 768 },
-  { resolution: '1920x1080', width: 1920, height: 1080 },
-  { resolution: '1920x1200', width: 1920, height: 1200 },
-];
-
-const UHD_THRESHOLD = { width: 3840, height: 2160 };
-
-export async function fetchBingImages(fetchImpl: FetchImpl, market: string): Promise<BingImageEntry[]> {
+export async function fetchBingImages(fetchImpl: FetchImpl, market: string, signal?: AbortSignal): Promise<BingImageEntry[]> {
   const url = `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=${market}`;
-  const response = await fetchImpl(url);
+  const response = await fetchImpl(url, { signal });
 
   if (!response.ok) {
     throw new Error(`HPImageArchive request failed for market ${market}: HTTP ${response.status}`);
@@ -35,41 +24,18 @@ const FALLBACK_MARKETS: Partial<Record<Market, Market>> = {
   'de-CH': 'de-DE',
 };
 
-export async function fetchBingImagesWithFallback(fetchImpl: FetchImpl, market: Market): Promise<BingImageEntry[]> {
-  const primary = await fetchBingImages(fetchImpl, market);
+export async function fetchBingImagesWithFallback(
+  fetchImpl: FetchImpl,
+  market: Market,
+  signal?: AbortSignal,
+): Promise<BingImageEntry[]> {
+  const primary = await fetchBingImages(fetchImpl, market, signal);
   const fallback = FALLBACK_MARKETS[market];
   if (primary.length > 0 || !fallback) {
     return primary;
   }
 
-  return fetchBingImages(fetchImpl, fallback);
-}
-
-export function resolveImageResolution(
-  displays: DisplaySize[],
-  resolutionOverride: ImageResolution | null,
-): ImageResolution {
-  if (resolutionOverride) {
-    return resolutionOverride;
-  }
-
-  const largest = displays.reduce((best, candidate) =>
-    candidate.width * candidate.height > best.width * best.height ? candidate : best,
-  );
-
-  if (largest.width >= UHD_THRESHOLD.width && largest.height >= UHD_THRESHOLD.height) {
-    return 'UHD';
-  }
-
-  const fitting = KNOWN_RESOLUTIONS.filter(
-    (candidate) => candidate.width <= largest.width && candidate.height <= largest.height,
-  );
-
-  if (fitting.length === 0) {
-    return KNOWN_RESOLUTIONS[0].resolution;
-  }
-
-  return fitting.reduce((best, candidate) => (candidate.width > best.width ? candidate : best)).resolution;
+  return fetchBingImages(fetchImpl, fallback, signal);
 }
 
 export function buildImageUrl(entry: BingImageEntry, resolution: ImageResolution): string {
@@ -78,8 +44,8 @@ export function buildImageUrl(entry: BingImageEntry, resolution: ImageResolution
 
 const COPYRIGHT_ATTRIBUTION_PATTERN = /\s*\(([^()]*)\)\s*$/;
 
-export async function downloadImage(fetchImpl: FetchImpl, url: string): Promise<ArrayBuffer> {
-  const response = await fetchImpl(url);
+export async function downloadImage(fetchImpl: FetchImpl, url: string, signal?: AbortSignal): Promise<ArrayBuffer> {
+  const response = await fetchImpl(url, { signal });
 
   if (!response.ok) {
     throw new Error(`Image download failed for ${url}: HTTP ${response.status}`);

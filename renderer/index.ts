@@ -5,12 +5,9 @@ import type {
   StoredImageMetadata,
 } from "./index.models.js";
 
-const APPLY_DEBOUNCE_MS = 400;
-
 // Gallery items in chronological order (oldest left, newest right).
 let historyItems: HistoryItemPayload[] = [];
 let selectedIndex = -1;
-let applyTimeout: ReturnType<typeof setTimeout> | undefined;
 let applyRequestId = 0;
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -143,7 +140,7 @@ function buildThumbnail(
 
   button.append(img, date);
   button.addEventListener("click", () => {
-    select(index, 0);
+    select(index);
   });
 
   return button;
@@ -198,9 +195,9 @@ function centerSelection(animate: boolean): void {
   }
 }
 
-// Updates the in-app preview immediately and applies the desktop wallpaper after `delayMs`,
-// so rapid arrow-key navigation doesn't set the system wallpaper for every step.
-function select(index: number, delayMs: number): void {
+// Updates the in-app preview and requests the desktop wallpaper at once. Rapid arrow-key
+// navigation is coalesced by the applier (latest wins), so there's no debounce here.
+function select(index: number): void {
   const clamped = Math.max(0, Math.min(historyItems.length - 1, index));
   if (clamped === selectedIndex || historyItems.length === 0) {
     return;
@@ -208,11 +205,7 @@ function select(index: number, delayMs: number): void {
 
   selectedIndex = clamped;
   renderSelection(true);
-
-  clearTimeout(applyTimeout);
-  applyTimeout = setTimeout(() => {
-    void applySelection();
-  }, delayMs);
+  void applySelection();
 }
 
 async function applySelection(): Promise<void> {
@@ -222,11 +215,23 @@ async function applySelection(): Promise<void> {
   }
 
   const requestId = ++applyRequestId;
-  const selected = await window.bingwall.selectWallpaper(item.metadata.date);
-  if (!selected || requestId !== applyRequestId) {
+  const reply = await window.bingwall.selectWallpaper(item.metadata.date);
+  // Stale replies and superseded requests change nothing: a newer request owns the outcome.
+  if (!reply || requestId !== applyRequestId || reply.status === "superseded") {
     return;
   }
 
+  if (reply.status === "error") {
+    showError(reply.message);
+    // The previous wallpaper and selection stay in place, so move the highlight back to it.
+    const current = await window.bingwall.getCurrentWallpaper();
+    if (requestId === applyRequestId) {
+      await loadHistory(current?.metadata.date);
+    }
+    return;
+  }
+
+  clearError();
   renderEmptyState(false);
 }
 
@@ -234,10 +239,10 @@ function renderGalleryControls(): void {
   const viewportEl = byId("history-viewport");
 
   byId("history-prev").addEventListener("click", () =>
-    select(selectedIndex - 1, APPLY_DEBOUNCE_MS),
+    select(selectedIndex - 1),
   );
   byId("history-next").addEventListener("click", () =>
-    select(selectedIndex + 1, APPLY_DEBOUNCE_MS),
+    select(selectedIndex + 1),
   );
 
   viewportEl.addEventListener("keydown", (event) => {
@@ -253,7 +258,7 @@ function renderGalleryControls(): void {
     }
 
     event.preventDefault();
-    select(target, APPLY_DEBOUNCE_MS);
+    select(target);
   });
 
   new ResizeObserver(() => centerSelection(false)).observe(viewportEl);
@@ -324,13 +329,22 @@ function showSuccess(message: string): void {
 async function handleRefreshResult(
   result: RefreshResultPayload,
 ): Promise<void> {
+  // A newer refresh owns the outcome: no message, no banner change.
+  if ("superseded" in result) {
+    return;
+  }
+
   if (!result.ok) {
     showError(result.error);
     return;
   }
 
-  clearError();
-  showSuccess("Wallpaper updated.");
+  if (result.warning) {
+    showError(result.warning);
+  } else {
+    clearError();
+    showSuccess("Wallpaper updated.");
+  }
 
   renderEmptyState(!result.current);
   await loadHistory(result.current?.metadata.date);

@@ -3,14 +3,18 @@
 Measures where the time goes when BingWall applies a wallpaper through
 `IDesktopWallpaper`, and whether the apply freezes the shell. Built for the
 "Profile where the 2–5 s wallpaper apply time goes" wayfinder task; later work on
-the applier can rerun it and compare against the recorded baseline.
+the applier can rerun it and compare against the recorded baseline. The `utility`
+variant and `--burst` mode measure the app's real applier child (spec #41).
 
 ```powershell
 npm run build:profile                           # compile to dist-profile/ only
 npm run profile:wallpaper:run                   # run the last build without recompiling
-npm run profile:wallpaper                       # build, then run: 3 rounds, two newest JPGs from ~/Pictures/BingWallpapers
+npm run profile:wallpaper                       # build app + profiler, then run: 3 rounds, two newest JPGs from ~/Pictures/BingWallpapers
 npm run profile:wallpaper -- --rounds 5 --sources C:\a.jpg,C:\b.jpg --settle 1500 --out C:\somewhere
 npm run profile:wallpaper -- --variants full-jpg/per-monitor,full-jpg/spi --label autocolorization-off
+npm run profile:wallpaper -- --variants full-jpg/utility,full-jpg/spi --rounds 10 --label manual-accent
+npm run profile:wallpaper -- --burst --label manual-accent
+npm run profile:wallpaper -- --burst --burst-rate 30 --burst-duration 3000 --rounds 3
 ```
 
 `--variants` picks a subset by name (spaces removed). `--label` names the machine
@@ -19,13 +23,22 @@ Dynamic Lighting and any known RGB or wallpaper tools that are running.
 
 It changes the real wallpaper many times and puts the original back at the end.
 Before running, quit BingWall (it would apply wallpapers too) and leave most of
-the desktop visible: minimise everything except the terminal.
-Results go to `%TEMP%\bingwall-profile\profile-<timestamp>.{json,md}`.
+the desktop visible: minimise everything except the terminal. It is never run in CI.
+
+Reports go to this folder's [`results/`](results/) as
+`profile-<timestamp>[-burst]-<label>.{json,md}`; `--out` puts them elsewhere. Commit the
+ones worth keeping as evidence, under a dated name like the existing ones. Generated
+images (BMPs, prescaled JPGs, burst links) go to `%TEMP%\bingwall-profile`.
+
+The `utility` variant and `--burst` fork the compiled applier child,
+`dist/main/applier/applierChild.js`. `npm run profile:wallpaper` builds it with
+`build:ts` first; `profile:wallpaper:run` doesn't, so run `npm run build:ts` yourself
+after changing `main/applier/`. `--applier <path>` forks a different build.
 
 ## Method
 
 The harness runs as an Electron main process, the same thread type that runs
-`main/nativeWallpaper.ts` in the app, and makes the same COM calls in the same order.
+`main/nativeWallpaper.ts` in the app until #45 moved applies into a utility process, and makes the same COM calls in the same order.
 
 - **Per-stage timings.** Each COM call (`CoCreateInstance`, `SetPosition`,
   `GetMonitorDevicePathCount`/`At`, each `SetWallpaper`, `Release`) is timed on its
@@ -67,10 +80,60 @@ images so every apply visibly changes the desktop:
 | `prescaled-bmp / per-monitor` | 24-bit BMP at each monitor's resolution | one per monitor |
 | `full-jpg / spi` | Bing JPG | `WallpaperStyle`/`TileWallpaper` in the registry, then `SystemParametersInfoW(SPI_SETDESKWALLPAPER, SPIF_UPDATEINIFILE \| SPIF_SENDCHANGE)` |
 | `full-jpg / active-desktop` | Bing JPG | `IActiveDesktop` `SetWallpaper` + `SetWallpaperOptions(CROPTOFIT)` + `ApplyChanges(ALL \| FORCE \| BUFFERED_REFRESH)` |
+| `full-jpg / utility` | Bing JPG | one `{op:'apply'}` message to the app's real applier child (see below) |
+
+All but `utility` make their calls on the profiler's Electron main thread and stay as a
+same-machine baseline for the applier.
 
 Each trial also records whether the accent colour (`Explorer\Accent\AccentColorMenu`)
-changed. A trial whose apply call throws is kept, with the error and the stages that
-finished before it.
+changed. A trial whose apply call throws, or whose applier reply isn't `applied`, is
+kept, with the error and the stages that finished before it.
+
+The per-variant table gives medians, plus the **worst** first visible change and the
+**worst** Explorer hang over all trials of that variant. Round 0 (warm-up) is left out.
+
+### `utility`: the real applier child
+
+The profiler forks `dist/main/applier/applierChild.js` with `utilityProcess.fork`,
+exactly as `main/main.ts` does, and talks to it with the shared message types from
+`main/applier/applier.models.ts`. Before the first trial it asks the child for its
+`capabilities`. The child loads its backend (koffi) before it listens, so that reply
+means spawn and koffi load are out of the measurements. The report lists the child's
+path and capabilities.
+
+- **Main-thread block** is only the `postMessage`. The stages also show when the reply
+  arrived, which is when the child's `SystemParametersInfoW` and `SendNotifyMessageW`
+  returned.
+- **First visible change** and **worst Explorer hang** use the same screen watcher and
+  Explorer pinger as the baseline variants, measured from the `postMessage`.
+
+The acceptance target (spec #41) is a median first visible change under 300 ms with a
+manual accent colour, and no Explorer hang beyond the ~55 ms baseline.
+
+### `--burst`: holding an arrow key through history
+
+Instead of the variant trials, each round sends `--burst-rate` apply requests per second
+(default 30) for `--burst-duration` ms (default 3000) to the applier child, with no
+debounce, as the renderer does when sliding through history. Requests alternate between
+the two sources, but every request gets its own path (a hard link, or a copy across
+volumes), so the final wallpaper names exactly one request. `--rounds` sets the number of
+bursts.
+
+After all replies are in and the desktop has settled, it reads
+`HKCU\Control Panel\Desktop\Wallpaper`. **Last image wins** passes when the last request was
+answered `applied` and is the wallpaper that's set; the run passes when every burst did.
+The report gives:
+
+- the **worst Explorer hang** over each burst and over the whole run;
+- last image wins as **PASS/FAIL**, per burst and overall;
+- how many requests were `applied`, `superseded`, errored or unanswered, the worst time
+  to post one request, the first visible change from the start of the burst, and when the
+  desktop settled after the last request.
+
+A negative "settled after last request" means the desktop stood still for `--settle` ms
+in the middle of the burst (likely when the accent colour follows the wallpaper and each
+apply takes 1–2 s); pass a longer `--settle` for that machine state. The verdict doesn't
+depend on it.
 
 `GetMonitorDevicePathCount` also counts monitors Windows remembers but that aren't
 attached. Per-monitor mode still calls `SetWallpaper` for them, as the app does.

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -65,8 +66,36 @@ export async function writeMetadata(folder: string, entries: StoredImageMetadata
 export async function saveImage(folder: string, date: string, data: ArrayBuffer): Promise<string> {
   await fs.mkdir(folder, { recursive: true });
   const imagePath = path.join(folder, `${date}.jpg`);
-  await fs.writeFile(imagePath, Buffer.from(data));
+  // Written beside the target and renamed into place, so a half-written image never shows up in history.
+  // The name is unique per call because downloads of the same date can overlap across refreshes.
+  const tempFile = `${imagePath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(tempFile, Buffer.from(data));
+    await renameRetryingWhileLocked(tempFile, imagePath);
+  } catch (error) {
+    await fs.rm(tempFile, { force: true });
+    throw error;
+  }
   return imagePath;
+}
+
+// Explorer or antivirus may briefly hold the live wallpaper open, which makes replacing it fail on Windows.
+const LOCKED_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const RENAME_ATTEMPTS = 4;
+const RENAME_BACKOFF_MS = 50;
+
+async function renameRetryingWhileLocked(from: string, to: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await fs.rename(from, to);
+      return;
+    } catch (error) {
+      if (attempt >= RENAME_ATTEMPTS || !LOCKED_CODES.has((error as NodeJS.ErrnoException).code ?? '')) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, RENAME_BACKOFF_MS * attempt));
+    }
+  }
 }
 
 export async function listImageDates(folder: string): Promise<string[]> {
