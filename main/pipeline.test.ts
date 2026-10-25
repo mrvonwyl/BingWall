@@ -403,6 +403,38 @@ describe('runDailyUpdate', () => {
       expect(deps.deleteImage).not.toHaveBeenCalled();
     });
 
+    it('does not settle until an apply already sent and its state write have settled', async () => {
+      const gated = gatedFetch(sampleResponse);
+      const controller = new AbortController();
+      const applying = deferred<ApplyOutcome>();
+      const events: string[] = [];
+      const deps = buildDeps({
+        fetchImpl: gated.fetchImpl,
+        signal: controller.signal,
+        setWallpaper: vi.fn(() => applying.promise),
+        writeState: vi.fn(async () => {
+          events.push('state written');
+        }),
+      });
+
+      const run = runDailyUpdate(deps).then(
+        () => events.push('settled'),
+        () => events.push('settled'),
+      );
+      gated.gateFor('Sample').resolve(new Uint8Array([1]).buffer);
+      await vi.waitFor(() => expect(deps.setWallpaper).toHaveBeenCalledTimes(1));
+      controller.abort();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(events).toEqual([]);
+
+      applying.resolve({ kind: 'applied' });
+      await run;
+
+      expect(events).toEqual(['state written', 'settled']);
+      expect(deps.writeState).toHaveBeenCalledWith(deps.dataFolder, { selectedDate: '2026-08-16' });
+      expect(deps.writeMetadata).not.toHaveBeenCalled();
+    });
+
     it('passes the abort signal on to every request', async () => {
       const controller = new AbortController();
       const deps = buildDeps({ signal: controller.signal });

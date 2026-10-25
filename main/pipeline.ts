@@ -7,8 +7,9 @@ import type { StoredImageMetadata } from './bing.models.js';
 import type { ApplyOutcome } from './applier/applier.models.js';
 import type { ImageJob, RunDailyUpdateDeps, RunDailyUpdateResult } from './pipeline.models.js';
 
-// Once `deps.signal` aborts, the refresh writes no more files, metadata or state, makes no apply, and
-// rejects with the signal's reason as soon as no file write is under way.
+// Once `deps.signal` aborts, the refresh writes no more files or metadata, makes no new apply, and rejects
+// with the signal's reason as soon as no file write is under way and an apply already sent (with its state
+// write) has settled.
 export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDailyUpdateResult> {
   const { signal } = deps;
   const images = await fetchBingImagesWithFallback(deps.fetchImpl, deps.market, signal);
@@ -42,8 +43,10 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
   applying.catch(() => undefined);
 
   const settled = await Promise.allSettled(jobs.map((job) => job.landed));
+  // Not cut short by an abort: an apply already sent must finish, and record its state if applied, before
+  // this run settles, so nothing is written once the next refresh has started.
+  const applied = await applying;
   signal?.throwIfAborted();
-  const applied = await untilAborted(applying, signal);
 
   // A failed date drops out of history, so its image is pruned like any other orphan.
   const failedDates = new Set<string>();
