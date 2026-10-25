@@ -21,12 +21,12 @@ jobs:
     if: github.actor == 'mrvonwyl'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -57,7 +57,7 @@ jobs:
         run: npm run build -- --publish never
 
       - name: Upload installer as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BingWall-Setup-${{ steps.version.outputs.version }}
           path: release/BingWall-Setup-${{ steps.version.outputs.version }}.exe
