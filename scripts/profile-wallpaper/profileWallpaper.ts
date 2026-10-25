@@ -23,7 +23,7 @@ import {
 import type { Environment, ImageFile, ImageSet, ProfileReport, Stage, Trial, Variant } from './profileWallpaper.models.js';
 
 // Profiles an IDesktopWallpaper apply stage by stage, on the Electron main thread,
-// the same way main/nativeWallpaper.ts runs it. See README.md next to this file.
+// the way the app ran it before #45 (the removed main/nativeWallpaper.ts). See README.md next to this file.
 
 const VARIANTS: Variant[] = [
   { input: 'full-jpg', mode: 'per-monitor' },
@@ -182,7 +182,7 @@ function timed<T>(stages: Stage[], name: string, fn: () => T): T {
   return result;
 }
 
-// The apply under test: same calls, same order as main/nativeWallpaper.ts, each one timed.
+// The apply under test: same calls, same order as the removed main/nativeWallpaper.ts, each one timed.
 // Stages are pushed as they finish, so a failing call still leaves the earlier timings.
 function applyInstrumented(set: ImageSet, variant: Variant, stages: Stage[]): void {
   const imagePath = imageFor(set, variant, 0).path;

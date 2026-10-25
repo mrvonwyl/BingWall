@@ -25,7 +25,7 @@ Results go to `%TEMP%\bingwall-profile\profile-<timestamp>.{json,md}`.
 ## Method
 
 The harness runs as an Electron main process, the same thread type that runs
-`main/nativeWallpaper.ts` in the app, and makes the same COM calls in the same order.
+`main/nativeWallpaper.ts` in the app until #45 moved applies into a utility process, and makes the same COM calls in the same order.
 
 - **Per-stage timings.** Each COM call (`CoCreateInstance`, `SetPosition`,
   `GetMonitorDevicePathCount`/`At`, each `SetWallpaper`, `Release`) is timed on its

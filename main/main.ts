@@ -1,9 +1,10 @@
-import { app, BrowserWindow, Tray, Menu, dialog, ipcMain, nativeImage, powerMonitor, screen, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, dialog, ipcMain, nativeImage, powerMonitor, screen, shell, utilityProcess } from 'electron';
 import electronUpdater from 'electron-updater';
 const { autoUpdater } = electronUpdater;
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createApplierHost, toSetWallpaper } from './applier/applierHost.js';
 import { checkForUpdates } from './autoUpdate.js';
 import { readBootstrapPointer, writeBootstrapPointer } from './bootstrap.js';
 import { getCurrentWallpaper } from './currentWallpaper.js';
@@ -11,7 +12,6 @@ import { watchForDevReload } from './devReload.js';
 import type { CurrentWallpaperResult } from './currentWallpaper.models.js';
 import { downloadWallpaper } from './download.js';
 import { getHistory } from './history.js';
-import { setNativeWallpaper } from './nativeWallpaper.js';
 import { runDailyUpdate } from './pipeline.js';
 import { describeRefreshError } from './refreshError.js';
 import { readSettings, writeSettings } from './settings.js';
@@ -22,6 +22,15 @@ import { deleteImage, getDefaultDataFolder, listImageDates, readMetadata, reloca
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..', '..');
+
+// Wallpapers are applied by a long-lived utilityProcess, so main never makes a blocking OS call.
+// Forked lazily on the first apply; Electron ends it with the app.
+const applierHost = createApplierHost({
+  forkApplier: () =>
+    utilityProcess.fork(path.join(__dirname, 'applier', 'applierChild.js'), [], { serviceName: 'BingWall wallpaper applier' }),
+  logError: (message, details) => console.error(message, details ?? ''),
+});
+const setWallpaper = toSetWallpaper(applierHost);
 
 const BACKGROUND_REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -158,7 +167,7 @@ async function refreshWallpaper(replaceExisting: boolean): Promise<void> {
     readMetadata,
     writeMetadata,
     saveImage,
-    setWallpaper: setNativeWallpaper,
+    setWallpaper,
     listImageDates,
     deleteImage,
     writeState,
@@ -168,7 +177,7 @@ async function refreshWallpaper(replaceExisting: boolean): Promise<void> {
   if (replaceExisting && !result.wallpaperChanged) {
     const current = await getCurrentWallpaper({ dataFolder: getDataFolder(), readMetadata, readState });
     if (current) {
-      await setNativeWallpaper(current.imagePath);
+      await setWallpaper(current.imagePath);
     }
   }
 }
@@ -208,7 +217,7 @@ ipcMain.handle('select-wallpaper', async (_event, date: string) => {
   const result = await selectWallpaper(date, {
     dataFolder: getDataFolder(),
     readMetadata,
-    setWallpaper: setNativeWallpaper,
+    setWallpaper,
     writeState,
   });
 
