@@ -64,7 +64,7 @@ export const win32Native: Win32Native = {
   },
 
   // Not SPIF_SENDCHANGE / SendMessageTimeout: those wait on every top-level window
-  // (1-5 s with AutoColorization on). SendNotifyMessageW returns at once.
+  // (1-5 s when the accent colour follows the wallpaper). SendNotifyMessageW returns at once.
   notifyWallpaperChanged() {
     SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, SPI_SETDESKWALLPAPER, DESKTOP_SUBKEY);
   },
