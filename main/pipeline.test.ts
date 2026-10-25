@@ -43,6 +43,40 @@ const multiDayResponse: HPImageArchiveResponse = {
   ],
 };
 
+type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void; reject: (reason: unknown) => void };
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+// A fake fetch whose image downloads only finish when the test says so, keyed by the image's name.
+function gatedFetch(response: HPImageArchiveResponse) {
+  const gates = new Map<string, Deferred<ArrayBuffer>>();
+  const gateFor = (name: string) => {
+    let gate = gates.get(name);
+    if (!gate) {
+      gate = deferred<ArrayBuffer>();
+      gates.set(name, gate);
+    }
+    return gate;
+  };
+  const fetchImpl = vi.fn(async (url: string) => {
+    if (url.includes('HPImageArchive')) {
+      return { ok: true, status: 200, json: async () => response, arrayBuffer: async () => new ArrayBuffer(0) };
+    }
+    const name = /OHR\.(\w+)_/.exec(url)?.[1] ?? url;
+    return { ok: true, status: 200, json: async () => ({}), arrayBuffer: () => gateFor(name).promise };
+  });
+  const imageRequests = () => fetchImpl.mock.calls.filter(([url]) => !url.includes('HPImageArchive')).length;
+  return { fetchImpl, gateFor, imageRequests };
+}
+
 function buildDeps(overrides: Partial<RunDailyUpdateDeps> = {}): RunDailyUpdateDeps {
   return {
     fetchImpl: vi.fn(async () => ({
@@ -216,6 +250,30 @@ describe('runDailyUpdate', () => {
 
     expect(deps.saveImage).toHaveBeenCalledTimes(1);
     expect(deps.saveImage).toHaveBeenCalledWith(deps.dataFolder, '2026-08-16', expect.any(ArrayBuffer));
+  });
+
+  it('downloads every image in parallel and applies the target as soon as it lands', async () => {
+    const gated = gatedFetch(multiDayResponse);
+    const deps = buildDeps({ fetchImpl: gated.fetchImpl, listImageDates: vi.fn(async () => []) });
+
+    const run = runDailyUpdate(deps);
+
+    await vi.waitFor(() => expect(gated.imageRequests()).toBe(3));
+    expect(deps.setWallpaper).not.toHaveBeenCalled();
+
+    gated.gateFor('Newest').resolve(new Uint8Array([1]).buffer);
+    await vi.waitFor(() =>
+      expect(deps.setWallpaper).toHaveBeenCalledWith('C:\\fake\\Pictures\\BingWallpapers\\2026-08-16.jpg'),
+    );
+    expect(deps.writeMetadata).not.toHaveBeenCalled();
+
+    gated.gateFor('Middle').resolve(new Uint8Array([2]).buffer);
+    gated.gateFor('Oldest').resolve(new Uint8Array([3]).buffer);
+    await run;
+
+    expect(deps.setWallpaper).toHaveBeenCalledTimes(1);
+    const writtenEntries = (deps.writeMetadata as ReturnType<typeof vi.fn>).mock.calls[0][1] as { date: string }[];
+    expect(writtenEntries.map((entry) => entry.date)).toEqual(['2026-08-16', '2026-08-15', '2026-08-14']);
   });
 
   it('re-downloads already stored images when replaceExisting is set', async () => {
