@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { ApplyFailedError } from './applier/applierHost.js';
 import { buildImageUrl, downloadImage, fetchBingImagesWithFallback, resolveImageResolution, toStoredMetadata } from './bing.js';
 import { pruneOrphanedImages } from './history.js';
 import { upsertMetadata } from './storage.js';
@@ -40,10 +41,18 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
     deleteImage: deps.deleteImage,
   });
 
+  let wallpaperChanged = false;
   if (deps.dailyAutoRefresh) {
-    await deps.setWallpaper(newestImagePath);
-    await deps.writeState(deps.dataFolder, { selectedDate: newestMetadata.date });
+    const outcome = await deps.setWallpaper(newestImagePath);
+    if (outcome.kind === 'error') {
+      throw new ApplyFailedError(outcome);
+    }
+    // Only an applied wallpaper is remembered, so the saved selection always matches the desktop.
+    if (outcome.kind === 'applied') {
+      await deps.writeState(deps.dataFolder, { selectedDate: newestMetadata.date });
+      wallpaperChanged = true;
+    }
   }
 
-  return { imagePath: newestImagePath, metadata: newestMetadata, wallpaperChanged: deps.dailyAutoRefresh };
+  return { imagePath: newestImagePath, metadata: newestMetadata, wallpaperChanged };
 }

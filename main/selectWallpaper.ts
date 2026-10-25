@@ -10,8 +10,15 @@ export async function selectWallpaper(date: string, deps: SelectWallpaperDeps): 
   }
 
   const imagePath = path.join(deps.dataFolder, `${date}.jpg`);
-  await deps.setWallpaper(imagePath);
+  const outcome = await deps.setWallpaper(imagePath);
+  if (outcome.kind === 'superseded') {
+    return { status: 'superseded' };
+  }
+  if (outcome.kind === 'error') {
+    return { status: 'error', error: outcome };
+  }
+  // Only an applied wallpaper is remembered, so the saved selection always matches the desktop.
   await deps.writeState(deps.dataFolder, { selectedDate: date });
 
-  return { metadata, imagePath };
+  return { status: 'applied', metadata, imagePath };
 }

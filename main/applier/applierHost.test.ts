@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
-import { ApplyFailedError, createApplierHost, toSetWallpaper } from './applierHost.js';
-import type { ApplierReply, ApplierRequest, ApplyOutcome } from './applier.models.js';
+import { createApplierHost } from './applierHost.js';
+import type { ApplierReply, ApplierRequest } from './applier.models.js';
 
 // A scriptable stand-in for the utilityProcess child.
 class FakeChild extends EventEmitter {
@@ -101,26 +101,5 @@ describe('applierHost', () => {
     replacement.reply({ id: replacement.posted[0].id, kind: 'applied' });
 
     await expect(next).resolves.toEqual({ kind: 'applied' });
-  });
-});
-
-describe('toSetWallpaper', () => {
-  it('resolves on applied and superseded', async () => {
-    const outcomes: ApplyOutcome[] = [{ kind: 'applied' }, { kind: 'superseded' }];
-    const setWallpaper = toSetWallpaper({ apply: async () => outcomes.shift()! });
-
-    await expect(setWallpaper('C:\\a.jpg')).resolves.toBeUndefined();
-    await expect(setWallpaper('C:\\b.jpg')).resolves.toBeUndefined();
-  });
-
-  it('rejects with an ApplyFailedError carrying the outcome on error', async () => {
-    const setWallpaper = toSetWallpaper({
-      apply: async () => ({ kind: 'error', error: 'os-rejected', code: 1813 }),
-    });
-
-    const rejection = await setWallpaper('C:\\a.jpg').catch((error: unknown) => error);
-
-    expect(rejection).toBeInstanceOf(ApplyFailedError);
-    expect((rejection as ApplyFailedError).outcome).toEqual({ kind: 'error', error: 'os-rejected', code: 1813 });
   });
 });
