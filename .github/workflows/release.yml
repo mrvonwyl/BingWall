@@ -34,24 +34,50 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Bump version and tag
+        id: version
         run: |
           npm version ${{ inputs.bump }} -m "chore(release): v%s"
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      # Build before pushing so a failed build doesn't leave an orphaned tag behind.
+      - name: Build installer
+        run: npm run build -- --publish never
+
+      - name: Upload installer as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BingWall-Setup-${{ steps.version.outputs.version }}
+          path: release/BingWall-Setup-${{ steps.version.outputs.version }}.exe
+          if-no-files-found: error
 
       - name: Push version bump and tag
         run: |
           git push origin HEAD:main
-          git push origin --tags
+          git push origin "v${{ steps.version.outputs.version }}"
 
-      - name: Compile TypeScript
-        run: npm run build:ts
-
-      - name: Build and publish release
-        run: npx electron-builder --publish always
+      # latest.yml and the blockmap are required by electron-updater for auto-updates.
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          gh release create "v$version" `
+            --title "BingWall $version" `
+            --generate-notes `
+            --latest `
+            "release/BingWall-Setup-$version.exe" `
+            "release/BingWall-Setup-$version.exe.blockmap" `
+            "release/latest.yml"
