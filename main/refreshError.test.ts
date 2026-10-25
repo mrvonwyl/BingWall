@@ -9,10 +9,33 @@ describe('describeRefreshError', () => {
     expect(result).toBe('Bing API error: HPImageArchive request failed for market de-CH: HTTP 500');
   });
 
-  it('labels a failed wallpaper apply as such, not as a network error', () => {
+  it('says Windows rejected the wallpaper, with its error code', () => {
     const result = describeRefreshError(new ApplyFailedError({ kind: 'error', error: 'os-rejected', code: 1813 }));
 
-    expect(result).toBe('Could not apply the wallpaper: os-rejected (code 1813)');
+    expect(result).toBe('Windows rejected the wallpaper (error 1813).');
+  });
+
+  it('suggests reinstalling or checking antivirus when the applier is unavailable', () => {
+    const result = describeRefreshError(
+      new ApplyFailedError({ kind: 'error', error: 'applier-unavailable', message: 'The wallpaper applier died twice' }),
+    );
+
+    expect(result).toBe(
+      "BingWall's wallpaper helper isn't working, so the wallpaper wasn't changed. " +
+        'Try reinstalling BingWall, or check whether your antivirus blocked it.',
+    );
+  });
+
+  it('says the apply took too long on timeout', () => {
+    const result = describeRefreshError(new ApplyFailedError({ kind: 'error', error: 'timeout' }));
+
+    expect(result).toBe('Applying the wallpaper took too long and was cancelled. Please try again.');
+  });
+
+  it('labels other apply failures as such, not as a network error', () => {
+    const result = describeRefreshError(new ApplyFailedError({ kind: 'error', error: 'backend-failed', message: 'boom' }));
+
+    expect(result).toBe('Could not apply the wallpaper: boom');
   });
 
   it('labels other Error instances as a network error', () => {
