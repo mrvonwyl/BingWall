@@ -7,7 +7,7 @@ import { createWin32Backend } from './win32.js';
 import type { Win32Native } from './win32.models.js';
 
 // Records the native calls in order; the registry is a plain map.
-function fakeNative(registry: Record<string, string>, spiSucceeds = true, lastError = 0) {
+function fakeNative(registry: Record<string, string>, spiSucceeds = true, lastError = 0, notifySucceeds = true) {
   const calls: string[] = [];
   const native: Win32Native = {
     readDesktopString: (name) => registry[name] ?? null,
@@ -22,6 +22,7 @@ function fakeNative(registry: Record<string, string>, spiSucceeds = true, lastEr
     getLastError: () => lastError,
     notifyWallpaperChanged: () => {
       calls.push('notify');
+      return notifySucceeds;
     },
   };
   return { native, calls };
@@ -60,6 +61,27 @@ describe('win32 backend', () => {
 
     expect(result).toMatchObject({ kind: 'error', error: 'os-rejected', code: 1813 });
     expect(calls).toEqual(['spi C:\\a.jpg']);
+  });
+
+  it('still reports applied but logs the error code when the change broadcast fails', async () => {
+    // 1159 = ERROR_MESSAGE_SYNC_ONLY, which an async send may give for a pointer below WM_USER.
+    const { native } = fakeNative({ WallpaperStyle: '10', TileWallpaper: '0' }, true, 1159, false);
+    const warnings: string[] = [];
+
+    const result = await createWin32Backend(native, { warn: (message) => warnings.push(message) }).apply('C:\\a.jpg');
+
+    expect(result).toEqual({ kind: 'applied' });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('1159');
+  });
+
+  it('logs nothing when the change broadcast succeeds', async () => {
+    const { native } = fakeNative({ WallpaperStyle: '10', TileWallpaper: '0' });
+    const warnings: string[] = [];
+
+    await createWin32Backend(native, { warn: (message) => warnings.push(message) }).apply('C:\\a.jpg');
+
+    expect(warnings).toEqual([]);
   });
 
   it('describes itself as a whole-desktop, persistent backend', () => {

@@ -8,6 +8,12 @@ export interface Win32Native {
   setDeskWallpaper(imagePath: string): boolean;
   // GetLastError(), read right after a failed call.
   getLastError(): number;
-  // SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, SPI_SETDESKWALLPAPER, "Control Panel\Desktop").
-  notifyWallpaperChanged(): void;
+  // SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, SPI_SETDESKWALLPAPER, "Control Panel\Desktop");
+  // false on failure, with the reason in getLastError().
+  notifyWallpaperChanged(): boolean;
 }
+
+export type Win32BackendLog = {
+  // Problems that don't fail the apply. Defaults to console.warn; the child inherits main's stdio.
+  warn: (message: string) => void;
+};

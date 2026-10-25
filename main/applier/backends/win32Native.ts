@@ -65,7 +65,10 @@ export const win32Native: Win32Native = {
 
   // Not SPIF_SENDCHANGE / SendMessageTimeout: those wait on every top-level window
   // (1-5 s when the accent colour follows the wallpaper). SendNotifyMessageW returns at once.
+  // Broadcast caveat (spec #41): MSDN says async sends can't carry a pointer for a message below
+  // WM_USER and may fail with ERROR_MESSAGE_SYNC_ONLY. Whether receivers get the string is a manual
+  // acceptance check (#52); if it fails, this switches to SendMessageTimeoutW + SMTO_ABORTIFHUNG.
   notifyWallpaperChanged() {
-    SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, SPI_SETDESKWALLPAPER, DESKTOP_SUBKEY);
+    return SendNotifyMessageW(HWND_BROADCAST, WM_SETTINGCHANGE, SPI_SETDESKWALLPAPER, DESKTOP_SUBKEY) !== 0;
   },
 };
