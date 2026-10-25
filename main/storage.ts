@@ -71,12 +71,31 @@ export async function saveImage(folder: string, date: string, data: ArrayBuffer)
   const tempFile = `${imagePath}.${process.pid}.${randomUUID()}.tmp`;
   try {
     await fs.writeFile(tempFile, Buffer.from(data));
-    await fs.rename(tempFile, imagePath);
+    await renameRetryingWhileLocked(tempFile, imagePath);
   } catch (error) {
     await fs.rm(tempFile, { force: true });
     throw error;
   }
   return imagePath;
+}
+
+// Explorer or antivirus may briefly hold the live wallpaper open, which makes replacing it fail on Windows.
+const LOCKED_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+const RENAME_ATTEMPTS = 4;
+const RENAME_BACKOFF_MS = 50;
+
+async function renameRetryingWhileLocked(from: string, to: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await fs.rename(from, to);
+      return;
+    } catch (error) {
+      if (attempt >= RENAME_ATTEMPTS || !LOCKED_CODES.has((error as NodeJS.ErrnoException).code ?? '')) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, RENAME_BACKOFF_MS * attempt));
+    }
+  }
 }
 
 export async function listImageDates(folder: string): Promise<string[]> {
