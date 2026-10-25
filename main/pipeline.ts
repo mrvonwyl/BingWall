@@ -43,32 +43,49 @@ export async function runDailyUpdate(deps: RunDailyUpdateDeps): Promise<RunDaily
   const settled = await Promise.allSettled(jobs.map((job) => job.landed));
   const applied = await applying;
 
-  const failed = settled.find((result) => result.status === 'rejected');
-  if (failed) {
-    throw failed.reason;
-  }
+  // A failed date drops out of history, so its image is pruned like any other orphan.
+  const failedDates = new Set<string>();
+  jobs.forEach((job, index) => {
+    if (settled[index].status === 'rejected') {
+      failedDates.add(job.metadata.date);
+    }
+  });
+  retained = retained.filter((entry) => !failedDates.has(entry.date));
 
   // Oldest first, so the newest ends up at the front of the history.
   for (const job of [...jobs].reverse()) {
-    if (job.downloaded) {
+    if (job.downloaded && !failedDates.has(job.metadata.date)) {
       retained = upsertMetadata(retained, job.metadata);
     }
   }
 
   await deps.writeMetadata(deps.dataFolder, retained);
+  const appliedDate = (await deps.readState(deps.dataFolder))?.selectedDate;
   await pruneOrphanedImages({
     dataFolder: deps.dataFolder,
     entries: retained,
+    keepDates: appliedDate ? [appliedDate] : [],
     listImageDates: deps.listImageDates,
     deleteImage: deps.deleteImage,
   });
 
+  if (target) {
+    const targetResult = settled[jobs.indexOf(target)];
+    if (targetResult.status === 'rejected') {
+      throw targetResult.reason;
+    }
+  }
   if (applied?.outcome.kind === 'error') {
     throw new ApplyFailedError(applied.outcome);
   }
 
-  const newestImagePath = (settled[0] as PromiseFulfilledResult<string>).value;
-  return { imagePath: newestImagePath, metadata: newestMetadata, wallpaperChanged: applied?.outcome.kind === 'applied' };
+  const newest = settled[0];
+  return {
+    imagePath: newest.status === 'fulfilled' ? newest.value : path.join(deps.dataFolder, `${newestMetadata.date}.jpg`),
+    metadata: newestMetadata,
+    wallpaperChanged: applied?.outcome.kind === 'applied',
+    failedDates: [...failedDates],
+  };
 }
 
 // With daily auto-refresh on, the newest image. With it off, nothing changes unless the stored files are

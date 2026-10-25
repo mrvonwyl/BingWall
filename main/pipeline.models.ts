@@ -27,4 +27,6 @@ export type RunDailyUpdateResult = {
   imagePath: string;
   metadata: StoredImageMetadata;
   wallpaperChanged: boolean;
+  // Dates whose download failed while the refresh as a whole went ahead; they are not in history.
+  failedDates: string[];
 };

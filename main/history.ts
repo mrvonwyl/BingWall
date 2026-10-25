@@ -12,7 +12,7 @@ export async function getHistory(deps: GetHistoryDeps): Promise<HistoryItem[]> {
 }
 
 export async function pruneOrphanedImages(deps: PruneOrphanedImagesDeps): Promise<string[]> {
-  const retainedDates = new Set(deps.entries.map((entry) => entry.date));
+  const retainedDates = new Set([...deps.entries.map((entry) => entry.date), ...(deps.keepDates ?? [])]);
   const dates = await deps.listImageDates(deps.dataFolder);
   const orphaned = dates.filter((date) => !retainedDates.has(date));
 
