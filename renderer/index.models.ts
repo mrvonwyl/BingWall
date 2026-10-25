@@ -51,6 +51,8 @@ export type BingWallAPI = {
   updateSettings: (change: Partial<Settings>) => Promise<Settings>;
   refresh: () => Promise<RefreshResultPayload>;
   onRefreshResult: (callback: (result: RefreshResultPayload) => void) => void;
+  // The OS regional format locale (e.g. de-CH), which dates are formatted with.
+  getSystemLocale: () => Promise<string>;
   getDataFolder: () => Promise<string>;
   chooseDataFolder: () => Promise<string | null>;
   relocateDataFolder: (newFolder: string) => Promise<string>;
