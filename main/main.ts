@@ -20,6 +20,7 @@ import type { RefreshRun } from './refreshRunner.models.js';
 import { readSettings, readSettingsInOrder, updateSettings } from './settings.js';
 import type { Settings } from './settings.models.js';
 import { selectWallpaper } from './selectWallpaper.js';
+import { shouldShowWindowAtStartup } from './startupVisibility.js';
 import { readState, writeState } from './state.js';
 import { deleteImage, getDefaultDataFolder, listImageDates, readMetadata, relocateDataFolder, saveImage, writeMetadata } from './storage.js';
 
@@ -320,8 +321,11 @@ app.whenReady().then(async () => {
   dataFolder = pointer.dataFolder;
   await writeBootstrapPointer(getAppDataFolder(), { dataFolder });
 
+  // Read after the pointer, so "Start minimized" comes from a moved data folder too.
+  const { startMinimized } = await readSettings(getDataFolder());
+
   createTray();
-  createWindow(!app.getLoginItemSettings().wasOpenedAtLogin);
+  createWindow(shouldShowWindowAtStartup({ startMinimized, openedAtLogin: app.getLoginItemSettings().wasOpenedAtLogin }));
   void safeRefreshWallpaper();
 
   if (!app.isPackaged && process.env.BINGWALL_DEV_RELOAD === '1') {
