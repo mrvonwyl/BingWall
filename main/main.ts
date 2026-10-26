@@ -20,7 +20,7 @@ import type { RefreshRun } from './refreshRunner.models.js';
 import { readSettings, readSettingsInOrder, updateSettings } from './settings.js';
 import type { Settings } from './settings.models.js';
 import { selectWallpaper } from './selectWallpaper.js';
-import { shouldShowWindowAtStartup } from './startupVisibility.js';
+import { loginItemSettings, readStartupSettings, shouldShowWindowAtStartup, wasOpenedAtLogin } from './startupVisibility.js';
 import { readState, writeState } from './state.js';
 import { deleteImage, getDefaultDataFolder, listImageDates, readMetadata, relocateDataFolder, saveImage, writeMetadata } from './storage.js';
 
@@ -94,6 +94,19 @@ function createWindow(show: boolean): void {
   mainWindow.loadFile(path.join(projectRoot, 'renderer', 'index.html'));
 }
 
+// Brings the window back from the tray or the taskbar, recreating it if it was destroyed.
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow(true);
+    return;
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 function buildTrayMenu(): Menu {
   return Menu.buildFromTemplate([
     {
@@ -108,8 +121,8 @@ function buildTrayMenu(): Menu {
     {
       label: 'Launch on login',
       type: 'checkbox',
-      checked: app.getLoginItemSettings().openAtLogin,
-      click: (menuItem) => app.setLoginItemSettings({ openAtLogin: menuItem.checked }),
+      checked: app.getLoginItemSettings(loginItemSettings(true)).openAtLogin,
+      click: (menuItem) => app.setLoginItemSettings(loginItemSettings(menuItem.checked)),
     },
     { type: 'separator' },
     {
@@ -128,10 +141,7 @@ function createTray(): void {
   tray.setToolTip('BingWall');
   tray.setContextMenu(buildTrayMenu());
 
-  tray.on('click', () => {
-    mainWindow?.show();
-    mainWindow?.focus();
-  });
+  tray.on('click', showMainWindow);
 
   tray.on('right-click', () => {
     tray?.setContextMenu(buildTrayMenu());
@@ -316,16 +326,21 @@ ipcMain.handle('relocate-data-folder', async (_event, newFolder: string) => {
   return dataFolder;
 });
 
-app.whenReady().then(async () => {
+async function startApp(): Promise<void> {
+  // Created first, so the app stays reachable from the tray even if startup fails further down.
+  createTray();
+
   const pointer = await readBootstrapPointer(getAppDataFolder(), getDefaultDataFolder());
   dataFolder = pointer.dataFolder;
   await writeBootstrapPointer(getAppDataFolder(), { dataFolder });
 
   // Read after the pointer, so "Start minimized" comes from a moved data folder too.
-  const { startMinimized } = await readSettings(getDataFolder());
+  const { startMinimized } = await readStartupSettings(
+    () => readSettings(getDataFolder()),
+    (message, error) => console.error(message, error),
+  );
 
-  createTray();
-  createWindow(shouldShowWindowAtStartup({ startMinimized, openedAtLogin: app.getLoginItemSettings().wasOpenedAtLogin }));
+  createWindow(shouldShowWindowAtStartup({ startMinimized, openedAtLogin: wasOpenedAtLogin(process.argv) }));
   void safeRefreshWallpaper();
 
   if (!app.isPackaged && process.env.BINGWALL_DEV_RELOAD === '1') {
@@ -348,7 +363,19 @@ app.whenReady().then(async () => {
       mainWindow?.show();
     }
   });
-});
+}
+
+// The app starts hidden in the tray, so a second launch would otherwise go unnoticed as a second tray icon.
+if (app.requestSingleInstanceLock()) {
+  app.on('second-instance', () => {
+    if (app.isReady()) {
+      showMainWindow();
+    }
+  });
+  void app.whenReady().then(startApp);
+} else {
+  app.quit();
+}
 
 app.on('before-quit', () => {
   isQuitting = true;
