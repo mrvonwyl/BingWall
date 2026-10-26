@@ -28,7 +28,8 @@ export async function readStartupSettings(
   }
 }
 
-// A login start always stays hidden in the tray; a manual start shows the window only with "Start minimized" off.
-export function shouldShowWindowAtStartup({ startMinimized, openedAtLogin }: StartupVisibilityInput): boolean {
-  return !openedAtLogin && !startMinimized;
+// A login start always stays hidden in the tray. A manual start shows the window on the very first start,
+// so a new user sees the app once, and after that only with "Start minimized" off.
+export function shouldShowWindowAtStartup({ startMinimized, openedAtLogin, firstStart }: StartupVisibilityInput): boolean {
+  return !openedAtLogin && (firstStart || !startMinimized);
 }

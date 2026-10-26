@@ -330,7 +330,7 @@ async function startApp(): Promise<void> {
   // Created first, so the app stays reachable from the tray even if startup fails further down.
   createTray();
 
-  const pointer = await readBootstrapPointer(getAppDataFolder(), getDefaultDataFolder());
+  const { pointer, firstStart } = await readBootstrapPointer(getAppDataFolder(), getDefaultDataFolder());
   dataFolder = pointer.dataFolder;
   await writeBootstrapPointer(getAppDataFolder(), { dataFolder });
 
@@ -340,7 +340,7 @@ async function startApp(): Promise<void> {
     (message, error) => console.error(message, error),
   );
 
-  createWindow(shouldShowWindowAtStartup({ startMinimized, openedAtLogin: wasOpenedAtLogin(process.argv) }));
+  createWindow(shouldShowWindowAtStartup({ startMinimized, openedAtLogin: wasOpenedAtLogin(process.argv), firstStart }));
   void safeRefreshWallpaper();
 
   if (!app.isPackaged && process.env.BINGWALL_DEV_RELOAD === '1') {

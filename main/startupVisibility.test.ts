@@ -10,13 +10,19 @@ import {
 
 describe('shouldShowWindowAtStartup', () => {
   it.each([
-    { startMinimized: true, openedAtLogin: true, show: false },
-    { startMinimized: true, openedAtLogin: false, show: false },
-    { startMinimized: false, openedAtLogin: true, show: false },
-    { startMinimized: false, openedAtLogin: false, show: true },
-  ])('startMinimized $startMinimized, opened at login $openedAtLogin: shows the window $show', ({ startMinimized, openedAtLogin, show }) => {
-    expect(shouldShowWindowAtStartup({ startMinimized, openedAtLogin })).toBe(show);
-  });
+    { startMinimized: true, openedAtLogin: true, firstStart: false, show: false },
+    { startMinimized: true, openedAtLogin: false, firstStart: false, show: false },
+    { startMinimized: false, openedAtLogin: true, firstStart: false, show: false },
+    { startMinimized: false, openedAtLogin: false, firstStart: false, show: true },
+    { startMinimized: true, openedAtLogin: false, firstStart: true, show: true },
+    { startMinimized: false, openedAtLogin: false, firstStart: true, show: true },
+    { startMinimized: true, openedAtLogin: true, firstStart: true, show: false },
+  ])(
+    'startMinimized $startMinimized, opened at login $openedAtLogin, first start $firstStart: shows the window $show',
+    ({ startMinimized, openedAtLogin, firstStart, show }) => {
+      expect(shouldShowWindowAtStartup({ startMinimized, openedAtLogin, firstStart })).toBe(show);
+    },
+  );
 });
 
 describe('wasOpenedAtLogin', () => {
