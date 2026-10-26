@@ -24,6 +24,7 @@ export type Settings = {
   dailyAutoRefresh: boolean;
   resolutionOverride: ImageResolution | null;
   market: Market;
+  startMinimized: boolean;
 };
 
 export type RefreshResultPayload =

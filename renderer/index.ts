@@ -401,6 +401,8 @@ function renderDownloadButton(): void {
 function showSettings(next: Settings): void {
   byId<HTMLInputElement>("auto-refresh-checkbox").checked =
     next.dailyAutoRefresh;
+  byId<HTMLInputElement>("start-minimized-checkbox").checked =
+    next.startMinimized;
   byId<HTMLSelectElement>("resolution-select").value =
     next.resolutionOverride ?? "";
   byId<HTMLSelectElement>("market-select").value = next.market;
@@ -419,6 +421,9 @@ async function syncSettings(): Promise<void> {
 
 async function renderSettings(): Promise<void> {
   const checkbox = byId<HTMLInputElement>("auto-refresh-checkbox");
+  const startMinimizedCheckbox = byId<HTMLInputElement>(
+    "start-minimized-checkbox",
+  );
   const resolutionSelect = byId<HTMLSelectElement>("resolution-select");
   const marketSelect = byId<HTMLSelectElement>("market-select");
   await syncSettings();
@@ -438,6 +443,11 @@ async function renderSettings(): Promise<void> {
 
   checkbox.addEventListener("change", () => {
     void update({ dailyAutoRefresh: checkbox.checked });
+  });
+
+  // Read only at startup, so a change takes effect on the next start.
+  startMinimizedCheckbox.addEventListener("change", () => {
+    void update({ startMinimized: startMinimizedCheckbox.checked });
   });
 
   resolutionSelect.addEventListener("change", () => {
