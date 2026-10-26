@@ -1,14 +1,17 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { BootstrapPointer } from './bootstrap.models.js';
+import type { BootstrapPointer, BootstrapRead } from './bootstrap.models.js';
 
-export async function readBootstrapPointer(appDataFolder: string, defaultDataFolder: string): Promise<BootstrapPointer> {
+export async function readBootstrapPointer(appDataFolder: string, defaultDataFolder: string): Promise<BootstrapRead> {
   try {
     const raw = await fs.readFile(path.join(appDataFolder, 'bootstrap.json'), 'utf-8');
-    return JSON.parse(raw) as BootstrapPointer;
+    return { pointer: JSON.parse(raw) as BootstrapPointer, firstStart: false };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) {
-      return { dataFolder: defaultDataFolder };
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { pointer: { dataFolder: defaultDataFolder }, firstStart: true };
+    }
+    if (error instanceof SyntaxError) {
+      return { pointer: { dataFolder: defaultDataFolder }, firstStart: false };
     }
     throw error;
   }

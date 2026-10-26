@@ -9,7 +9,7 @@ function entry(date: string): StoredImageMetadata {
   return { date, title: `Title ${date}`, description: 'desc', copyright: '© someone', copyrightlink: 'https://example.com' };
 }
 
-const AUTO_REFRESH_OFF: Settings = { dailyAutoRefresh: false, resolutionOverride: 'UHD', market: 'en-GB' };
+const AUTO_REFRESH_OFF: Settings = { dailyAutoRefresh: false, resolutionOverride: 'UHD', market: 'en-GB', startMinimized: true };
 const AUTO_REFRESH_ON: Settings = { ...AUTO_REFRESH_OFF, dailyAutoRefresh: true };
 
 function buildDeps(outcome: ApplyOutcome, dates = ['2026-08-16', '2026-08-15'], settings = AUTO_REFRESH_OFF) {

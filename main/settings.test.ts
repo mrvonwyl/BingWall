@@ -8,7 +8,7 @@ describe('readSettings', () => {
   it('returns the default settings when no settings file exists yet', async () => {
     const result = await readSettings('C:\\fake\\Pictures\\BingWallpapers');
 
-    expect(result).toEqual({ dailyAutoRefresh: true, resolutionOverride: null, market: 'de-CH' });
+    expect(result).toEqual({ dailyAutoRefresh: true, resolutionOverride: null, market: 'de-CH', startMinimized: true });
   });
 });
 
@@ -24,10 +24,23 @@ describe('writeSettings + readSettings', () => {
   it('round-trips a written settings value', async () => {
     tempFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-settings-'));
 
-    await writeSettings(tempFolder, { dailyAutoRefresh: false, resolutionOverride: '1920x1080', market: 'en-GB' });
+    await writeSettings(tempFolder, { dailyAutoRefresh: false, resolutionOverride: '1920x1080', market: 'en-GB', startMinimized: false });
     const result = await readSettings(tempFolder);
 
-    expect(result).toEqual({ dailyAutoRefresh: false, resolutionOverride: '1920x1080', market: 'en-GB' });
+    expect(result).toEqual({ dailyAutoRefresh: false, resolutionOverride: '1920x1080', market: 'en-GB', startMinimized: false });
+  });
+
+  it('starts minimized when an older settings file has no such field, keeping its other values', async () => {
+    tempFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-settings-'));
+    await fs.writeFile(
+      path.join(tempFolder, 'settings.json'),
+      JSON.stringify({ dailyAutoRefresh: false, resolutionOverride: 'UHD', market: 'en-US' }),
+      'utf-8',
+    );
+
+    const result = await readSettings(tempFolder);
+
+    expect(result).toEqual({ dailyAutoRefresh: false, resolutionOverride: 'UHD', market: 'en-US', startMinimized: true });
   });
 });
 
@@ -42,7 +55,7 @@ describe('updateSettings', () => {
 
   it('runs concurrent updates one after another, so none undoes another', async () => {
     tempFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'bingwall-settings-'));
-    await writeSettings(tempFolder, { dailyAutoRefresh: true, resolutionOverride: null, market: 'de-CH' });
+    await writeSettings(tempFolder, { dailyAutoRefresh: true, resolutionOverride: null, market: 'de-CH', startMinimized: true });
 
     const [market, autoRefresh] = await Promise.all([
       updateSettings(tempFolder, (current) => ({ ...current, market: 'en-GB' })),
@@ -50,11 +63,11 @@ describe('updateSettings', () => {
     ]);
 
     expect(market).toEqual({
-      previous: { dailyAutoRefresh: true, resolutionOverride: null, market: 'de-CH' },
-      next: { dailyAutoRefresh: true, resolutionOverride: null, market: 'en-GB' },
+      previous: { dailyAutoRefresh: true, resolutionOverride: null, market: 'de-CH', startMinimized: true },
+      next: { dailyAutoRefresh: true, resolutionOverride: null, market: 'en-GB', startMinimized: true },
     });
-    expect(autoRefresh?.next).toEqual({ dailyAutoRefresh: false, resolutionOverride: null, market: 'en-GB' });
-    expect(await readSettings(tempFolder)).toEqual({ dailyAutoRefresh: false, resolutionOverride: null, market: 'en-GB' });
+    expect(autoRefresh?.next).toEqual({ dailyAutoRefresh: false, resolutionOverride: null, market: 'en-GB', startMinimized: true });
+    expect(await readSettings(tempFolder)).toEqual({ dailyAutoRefresh: false, resolutionOverride: null, market: 'en-GB', startMinimized: true });
   });
 
   it('writes nothing when the update returns null', async () => {
